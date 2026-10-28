@@ -1545,3 +1545,6 @@ body[data-mode="mobile"] #viewerModelLoadProgress {
 body:not([data-mode="mobile"]) .home-view-button {
     display: none;
 }
+
+/* Instalações civis: no grupo de ferramentas, logo depois da Lista de materiais */
+#btnCivilPanel { order: 11; }
