@@ -109,7 +109,7 @@ async function loadDatabase() {
  * @param {() => void} deps.requestRenderFrame
  */
 export function createCivilQuantitiesFeature(deps) {
-    const { viewer, getModels, getSubnetwork, isItemsPropertySet, readNumber, normalizeQuantity, requestRenderFrame = () => {} } = deps;
+    const { viewer, getModels, getSubnetwork, isItemsPropertySet, readNumber, normalizeQuantity, getVisibleFraction = () => 1, requestRenderFrame = () => {} } = deps;
     const scene = viewer.scene;
 
     if (!document.getElementById("civilQuantitiesStyle")) {
@@ -196,6 +196,9 @@ export function createCivilQuantitiesFeature(deps) {
             if (!discipline) continue;
             const entity = scene.objects[metaObject.id];
             if (entity && entity.visible === false) continue;
+            // Cortes ativos (plano e/ou caixa): peça fora some, peça atravessada entra pela parte à vista
+            const fraction = getVisibleFraction(metaObject.id);
+            if (fraction <= 0) continue;
             const sets = metaObject.propertySets;
             if (!Array.isArray(sets)) continue;
             let subnetwork = null;
@@ -217,7 +220,8 @@ export function createCivilQuantitiesFeature(deps) {
                         quantity: normalized.quantity,
                         unitLabel: normalized.unitLabel,
                         // Tubos/calhas são "segmentos": o comprimento deles vem em centímetros
-                        isSegment: /segment/i.test(String(metaObject.type || ""))
+                        isSegment: /segment/i.test(String(metaObject.type || "")),
+                        fraction
                     });
                 }
             }
@@ -319,7 +323,7 @@ export function createCivilQuantitiesFeature(deps) {
             result = aggregateCivilPieces(database, pieces);
             const total = result.matched.length + result.pending.length;
             status.textContent = total
-                ? `${pieces.length} item(ns) de peças visíveis: ${result.matched.length} composição(ões) associada(s) e ${result.pending.length} pendência(s).`
+                ? `${pieces.length} item(ns) de peças visíveis${document.querySelector("#btnSectionPlane.active") ? " (dentro dos cortes)" : ""}: ${result.matched.length} composição(ões) associada(s) e ${result.pending.length} pendência(s).`
                 : "Nenhuma peça com itens associados nos modelos civis visíveis.";
             activeTab = result.matched.length || !result.pending.length ? "matched" : "pending";
             activeRowKey = null;

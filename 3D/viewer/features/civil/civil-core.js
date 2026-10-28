@@ -122,15 +122,19 @@ export function resolveCivilItem(database, { material, network, subnetwork }) {
  */
 export function quantityInBaseUnit(piece, entry) {
     const baseUnit = normalizeCivilText(entry?.unit || entry?.materialUnit);
-    if (baseUnit === "m" && piece.unitLabel !== "metro(s)") return piece.quantity / 100;
+    const fraction = Number.isFinite(piece.fraction) ? piece.fraction : 1;   // parte à vista com corte
+    if (baseUnit === "m" && piece.unitLabel !== "metro(s)") return (piece.quantity / 100) * fraction;
+    if (piece.unitLabel === "metro(s)") return piece.quantity * fraction;
     return piece.quantity;
 }
 
 /** Pendências: tubo/calha (segmento) sem unidade definida é comprimento em cm → metros. */
 function pendingQuantity(piece) {
+    const fraction = Number.isFinite(piece.fraction) ? piece.fraction : 1;
     if (piece.unitLabel !== "metro(s)" && piece.isSegment && /\b(tubos?|calhas?|eletrodutos?)\b/i.test(piece.material)) {
-        return { quantity: piece.quantity / 100, unitLabel: "metro(s)" };
+        return { quantity: (piece.quantity / 100) * fraction, unitLabel: "metro(s)" };
     }
+    if (piece.unitLabel === "metro(s)") return { quantity: piece.quantity * fraction, unitLabel: piece.unitLabel };
     return { quantity: piece.quantity, unitLabel: piece.unitLabel };
 }
 
