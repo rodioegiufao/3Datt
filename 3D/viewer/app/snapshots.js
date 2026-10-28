@@ -1,4 +1,5 @@
 // Módulo "snapshots" extraído de viewer-authenticated.js (mesma lógica, só reorganizada).
+import { canvasWithBackground, paintViewerBackground } from "./scene-style.js";
 import { viewer } from "../viewer-authenticated.js";
 import { applyCollisionIsolation } from "./collision-legacy.js";
 import { activeProjectKey } from "./model-loading.js";
@@ -106,7 +107,7 @@ export function downloadCurrentViewScreenshot() {
         // navegadores, downloads iniciados apenas dentro de callbacks assíncronos
         // (requestAnimationFrame/toBlob) podem ser bloqueados e o atalho 9 parece
         // não fazer nada.
-        downloadCanvasImage(canvas.toDataURL("image/png"), buildScreenshotFilename());
+        downloadCanvasImage(canvasWithBackground(canvas).toDataURL("image/png"), buildScreenshotFilename());
         return true;
     } catch (error) {
         console.error("Não foi possível gerar o print da visualização atual.", error);
@@ -149,6 +150,8 @@ export function getCanvasSnapshot({
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
 
+    // O canvas 3D é transparente: pinta o fundo da cena antes
+    paintViewerBackground(ctx, dstW, dstH);
     ctx.drawImage(srcCanvas, 0, 0, dstW, dstH);
 
     // Exporta como JPEG comprimido
