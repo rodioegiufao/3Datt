@@ -1,6 +1,7 @@
 import { createClashResultsView } from "./clash-results-view.js";
 import { buildClashReport } from "./clash-report.js";
 import { buildClashLink, defaultClashCamera } from "./clash-link.js";
+import { paintViewerBackground } from "../../app/scene-style.js";
 import { adjacentClashIndex, filterClashResults, groupClashResults, serializeClashViewpoint } from "./clash-core.js";
 import { runXktClashAnalysis } from "./clash-api.js";
 import { extractEntityGeometry, clearClashGeometryCache, positionsAABB } from "./xkt-geometry.js";
@@ -107,7 +108,7 @@ export function createClashFeature({viewer,panel,models,transforms,getAllObjectI
      const targetAspect=W/H,sourceAspect=source.width/source.height;
      let sw=source.width,sh=source.height,sx=0,sy=0;
      if(sourceAspect>targetAspect){sw=sh*targetAspect;sx=(source.width-sw)/2;}else{sh=sw/targetAspect;sy=(source.height-sh)/2;}
-     ctx.fillStyle="#b8c4d1";ctx.fillRect(0,0,W,H);ctx.drawImage(source,sx,sy,sw,sh,0,0,W,H);
+     paintViewerBackground(ctx,W,H);ctx.drawImage(source,sx,sy,sw,sh,0,0,W,H);
      // Marcador numerado no ponto da interferência
      try{if(p?.length===3&&typeof viewer.scene.camera.projectWorldPos==="function"){
          const cp=viewer.scene.camera.projectWorldPos(p),scale=source.width/(source.clientWidth||source.width);
