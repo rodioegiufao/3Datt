@@ -117,6 +117,24 @@ export function resolveCivilItem(database, { material, network, subnetwork }) {
 }
 
 /**
+ * Quantidade na unidade da base. Comprimentos chegam do modelo em centímetros;
+ * quando a composição é em metro e a peça ainda não foi convertida, divide por 100.
+ */
+export function quantityInBaseUnit(piece, entry) {
+    const baseUnit = normalizeCivilText(entry?.unit || entry?.materialUnit);
+    if (baseUnit === "m" && piece.unitLabel !== "metro(s)") return piece.quantity / 100;
+    return piece.quantity;
+}
+
+/** Pendências: tubo/calha (segmento) sem unidade definida é comprimento em cm → metros. */
+function pendingQuantity(piece) {
+    if (piece.unitLabel !== "metro(s)" && piece.isSegment && /\b(tubos?|calhas?|eletrodutos?)\b/i.test(piece.material)) {
+        return { quantity: piece.quantity / 100, unitLabel: "metro(s)" };
+    }
+    return { quantity: piece.quantity, unitLabel: piece.unitLabel };
+}
+
+/**
  * Agrupa as peças lidas do modelo.
  * pieces: [{ objectId, modelId, discipline, subnetwork, material, quantity, unitLabel }]
  */
@@ -145,25 +163,26 @@ export function aggregateCivilPieces(database, pieces) {
                 objectIds: new Set(),
                 databaseRows: new Set()
             };
-            item.quantity += piece.quantity;
+            item.quantity += quantityInBaseUnit(piece, entry);
             item.materials.add(piece.material);
             item.objectIds.add(piece.objectId);
             item.databaseRows.add(entry.row);
             matched.set(key, item);
         } else {
             const key = [network, normalizeCivilText(piece.subnetwork), normalizeCivilText(piece.material)].join("|");
+            const converted = pendingQuantity(piece);
             const item = pending.get(key) || {
                 discipline: piece.discipline,
                 subnetwork: piece.subnetwork,
                 material: piece.material,
-                unitLabel: piece.unitLabel,
+                unitLabel: converted.unitLabel,
                 quantity: 0,
                 status: result.status,
                 suggestions: result.suggestions || [],
                 otherNetworks: result.otherNetworks || [],
                 objectIds: new Set()
             };
-            item.quantity += piece.quantity;
+            item.quantity += converted.quantity;
             item.objectIds.add(piece.objectId);
             pending.set(key, item);
         }
@@ -189,4 +208,55 @@ export function describeCivilPending(item) {
         return `Na base existe só para ${item.otherNetworks.join(", ")}`;
     }
     return "Material não cadastrado na base";
+}
+
+// ---------------------------------------------------------------------------
+// Aba "Orçamento": pronta para colar na planilha orçamentária
+//   1.      INSTALAÇÕES HIDRÁULICAS
+//   1.1     ÁGUA FRIA
+//   1.1.1   SINAPI | 89429 | ADAPTADOR... | UN | 12
+//   2.      INSTALAÇÕES PLUVIAIS          (rede sem sub-rede: itens direto em 2.1, 2.2…)
+// ---------------------------------------------------------------------------
+export const CIVIL_BUDGET_TITLES = Object.freeze({
+    HID: "INSTALAÇÕES HIDRÁULICAS",
+    IRRI: "INSTALAÇÕES DE IRRIGAÇÃO",
+    GLP: "INSTALAÇÕES DE GÁS GLP",
+    PLU: "INSTALAÇÕES PLUVIAIS",
+    SAN: "INSTALAÇÕES SANITÁRIAS",
+    INC: "INCÊNDIO"
+});
+
+/**
+ * Linhas da aba Orçamento: [Item, Base, Código, Descrição, Unidade, Quantidade].
+ * Títulos de rede e sub-rede têm só Item e Descrição. Quantidades com 2 casas.
+ */
+export function buildCivilBudgetRows(matched, { titles = CIVIL_BUDGET_TITLES, decimals = 2 } = {}) {
+    const rows = [];
+    const round = (value) => Number(Number(value).toFixed(decimals));
+    let networkIndex = 0;
+    for (const discipline of CIVIL_DISCIPLINES) {
+        const items = matched.filter((item) => item.discipline === discipline);
+        if (!items.length) continue;
+        networkIndex += 1;
+        rows.push({ kind: "rede", cells: [`${networkIndex}.`, "", "", titles[discipline.code] || discipline.network, "", ""] });
+
+        // Sub-redes na ordem em que aparecem (já vêm ordenadas); "" = rede sem sub-rede
+        const subnetworks = [...new Set(items.map((item) => item.subnetwork || ""))];
+        const hasSubnetworks = subnetworks.some(Boolean);
+        subnetworks.forEach((subnetwork, subIndex) => {
+            const group = items.filter((item) => (item.subnetwork || "") === subnetwork);
+            let prefix = `${networkIndex}`;
+            if (hasSubnetworks) {
+                prefix = `${networkIndex}.${subIndex + 1}`;
+                rows.push({ kind: "subrede", cells: [prefix, "", "", (subnetwork || "Geral").toLocaleUpperCase("pt-BR"), "", ""] });
+            }
+            group.forEach((item, itemIndex) => {
+                rows.push({
+                    kind: "item",
+                    cells: [`${prefix}.${itemIndex + 1}`, item.base || "", item.code || "", item.description, item.unit || "", round(item.quantity)]
+                });
+            });
+        });
+    }
+    return rows;
 }

@@ -5,6 +5,7 @@
 import {
     CIVIL_DISCIPLINES,
     aggregateCivilPieces,
+    buildCivilBudgetRows,
     buildCivilDatabase,
     describeCivilPending,
     detectCivilDiscipline
@@ -205,6 +206,7 @@ export function createCivilQuantitiesFeature(deps) {
                     if (!material) continue;
                     const normalized = normalizeQuantity(prop, readNumber(prop?.value));
                     if (normalized.quantity === null || normalized.quantity <= 0) continue;
+
                     subnetwork ??= getSubnetwork(metaObject) || "Sem sub-rede";
                     pieces.push({
                         objectId: metaObject.id,
@@ -213,7 +215,9 @@ export function createCivilQuantitiesFeature(deps) {
                         subnetwork,
                         material,
                         quantity: normalized.quantity,
-                        unitLabel: normalized.unitLabel
+                        unitLabel: normalized.unitLabel,
+                        // Tubos/calhas são "segmentos": o comprimento deles vem em centímetros
+                        isSegment: /segment/i.test(String(metaObject.type || ""))
                     });
                 }
             }
@@ -341,7 +345,7 @@ export function createCivilQuantitiesFeature(deps) {
                 "Código": item.code,
                 "Descrição": item.description,
                 "Unidade": item.unit,
-                "Quantidade": Number(item.quantity.toFixed(4)),
+                "Quantidade": Number(item.quantity.toFixed(2)),
                 "Peças": item.objectIds.size,
                 "Material no modelo": [...item.materials].join(" | ")
             }));
@@ -351,12 +355,25 @@ export function createCivilQuantitiesFeature(deps) {
                 "Sub-rede": item.subnetwork,
                 "Material no modelo": item.material,
                 "Unidade": item.unitLabel === "metro(s)" ? "M" : "UN",
-                "Quantidade": Number(item.quantity.toFixed(4)),
+                "Quantidade": Number(item.quantity.toFixed(2)),
                 "Peças": item.objectIds.size,
                 "Motivo": describeCivilPending(item)
             }));
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(matchedRows), "Associados");
+
+            // Orçamento: Item | Base | Código | Descrição | Unidade | Quantidade, já numerado por rede e sub-rede
+            const budgetRows = buildCivilBudgetRows(result.matched);
+            const budgetSheet = XLSX.utils.aoa_to_sheet(budgetRows.map((row) => row.cells));
+            budgetRows.forEach((row, index) => {
+                const itemCell = budgetSheet[XLSX.utils.encode_cell({ r: index, c: 0 })];
+                if (itemCell) { itemCell.t = "s"; itemCell.v = String(row.cells[0]); } // "1.1" como texto, não número
+                const qtyCell = budgetSheet[XLSX.utils.encode_cell({ r: index, c: 5 })];
+                if (qtyCell && row.kind === "item") qtyCell.z = "#,##0.00";
+            });
+            budgetSheet["!cols"] = [{ wch: 9 }, { wch: 10 }, { wch: 12 }, { wch: 110 }, { wch: 8 }, { wch: 12 }];
+            XLSX.utils.book_append_sheet(workbook, budgetSheet, "Orçamento");
+
             XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(pendingRows.length ? pendingRows : [{ "Motivo": "Sem pendências" }]), "Pendentes");
             const project = (document.body?.dataset?.project || "projeto").replace(/[^a-z0-9_-]+/gi, "-");
             XLSX.writeFile(workbook, `instalacoes-civis-${project}.xlsx`);
