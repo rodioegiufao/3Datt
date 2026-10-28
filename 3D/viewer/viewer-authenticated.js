@@ -312,6 +312,17 @@ performanceModeToggleButton?.addEventListener("click", () => togglePerformanceMo
 setupTouchNavigation();
 setupHomeViewButton();
 setupSectionTools();
+// Tutorial "Conheça o visualizador": convite na primeira visita e botão na Ajuda
+import("./features/tour/tour.js")
+    .then(({ setupTour }) => setupTour({
+        firstModelReady: new Promise((resolve) => {
+            if (Object.keys(viewer.scene.models || {}).length) resolve();
+            else viewer.scene.once("modelLoaded", () => resolve());
+        }),
+        // Quem chega por link de interferência vai direto ao assunto
+        skipWelcome: new URLSearchParams(window.location.search).has("interferencia")
+    }))
+    .catch((error) => console.warn("[tutorial] Não foi possível carregar:", error));
 
 export function setExplorerTabsAccess(tabIds) {
     const knownTabIds = new Set(EXPLORER_TAB_DEFINITIONS.map(({ id }) => id));
