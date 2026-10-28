@@ -17,6 +17,7 @@ import { setupEletrodutoAssociationExportShortcut } from "../eletroduto-associat
 import { getProjectConfig, hasProjectConfig } from "./project-config.js";
 import { getViewerPermissions, RESTRICTED_EXPLORER_TABS } from "./core/viewer-permissions.js";
 // Módulos do visualizador (funções separadas por área em ./app/)
+import { NAV_CUBE_STYLE, setupSceneStyle } from "./app/scene-style.js";
 import { materialsFeatureAllowed, setupClashLinkFromUrl, setupCollisionPanelControls, setupRestrictedViewerFeaturesAccessGate, transformFeatureAllowed } from "./app/access.js";
 import { annotationClickModeEnabled, ensureAnnotationsFeature } from "./app/annotations.js";
 import { closePropertyPanel } from "./app/electrical-schedules.js";
@@ -122,7 +123,7 @@ export const viewer = new Viewer({
 
     canvasId: "meuCanvas",
     preserveDrawingBuffer: true,
-    transparent: false,
+    transparent: true, // o fundo em degradê fica atrás do canvas (ver app/scene-style.js)
     saoEnabled: !viewerCompatibility.disableSAO,
     edgesEnabled: !viewerCompatibility.disableEdges,
     pbrEnabled: false,
@@ -173,24 +174,8 @@ const { highlightMaterial } = viewer.scene;
 highlightMaterial.color = [0, 0, 0];
 highlightMaterial.edgeColor = [0, 0, 0];
 
-function createGroundGrid() {
-    const gridGeometry = buildGridGeometry({
-        size: 100,
-        divisions: 100
-    });
-
-    new LineSet(viewer.scene, {
-        id: "groundGrid",
-        positions: gridGeometry.positions,
-        indices: gridGeometry.indices,
-        color: [0.6, 0.6, 0.6],
-        opacity: 0.35,
-        clippable: false,
-        collidable: false
-    });
-}
-
-createGroundGrid();
+// Fundo, chão com grade, sombra de contato, SAO e arestas (app/scene-style.js)
+setupSceneStyle({ viewer, requestRenderFrame, enableSAO: !viewerCompatibility.disableSAO, lowPower: viewerCompatibility.useCompatibilityMode });
 // Excel é carregado somente quando uma ferramenta de materiais/orçamento o solicita.
 setupEletrodutoAssociationExportShortcut({ viewer, setSearchStatus, requestRenderFrame, focusObjectById });
 
@@ -1126,7 +1111,8 @@ if (viewerCompatibility.enableNavCube) {
         size: 150,
         alignment: "bottomRight",
         bottomMargin: 20,
-        rightMargin: 20
+        rightMargin: 20,
+        ...NAV_CUBE_STYLE
     });
 }
 
