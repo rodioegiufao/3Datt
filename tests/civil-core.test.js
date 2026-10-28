@@ -64,5 +64,20 @@ const { pathToFileURL } = require("url");
     assert.strictEqual(result.pending.length, 1);
     assert.match(core.describeCivilPending(result.pending[0]), /ÁGUA FRIA/);
 
+    // Comprimento em cm convertido quando a composição é em metro
+    assert.strictEqual(core.quantityInBaseUnit({ quantity: 250, unitLabel: "item(ns)" }, { unit: "M" }), 2.5);
+    assert.strictEqual(core.quantityInBaseUnit({ quantity: 2.5, unitLabel: "metro(s)" }, { unit: "M" }), 2.5);
+    assert.strictEqual(core.quantityInBaseUnit({ quantity: 3, unitLabel: "item(ns)" }, { unit: "UN" }), 3);
+
+    // Aba Orçamento: rede → sub-rede → itens; rede sem sub-rede numera direto
+    const rows = core.buildCivilBudgetRows(result.matched).map((row) => row.cells);
+    assert.deepStrictEqual(rows.map((r) => r[0]), ["1.", "1.1", "1.1.1", "1.2", "1.2.1", "2.", "2.1"]);
+    assert.deepStrictEqual(rows[0], ["1.", "", "", "INSTALAÇÕES HIDRÁULICAS", "", ""]);
+    assert.strictEqual(rows[1][3], "ÁGUA FRIA");
+    assert.deepStrictEqual(rows[2], ["1.1.1", "SINAPI", "89402", "TUBO 32 RAMAL", "M", 3.5]);
+    assert.strictEqual(rows[3][3], "ALIMENTAÇÃO");
+    assert.strictEqual(rows[5][3], "INSTALAÇÕES DE IRRIGAÇÃO");
+    assert.deepStrictEqual(rows[6], ["2.1", "SINAPI", "89403", "TUBO 32 IRRIGAÇÃO", "M", 3]);
+
     console.log("instalações civis: ok");
 })().catch((error) => { console.error(error); process.exitCode = 1; });
