@@ -3,7 +3,7 @@ import { RESTRICTED_EXPLORER_TABS, getViewerPermissions } from "../core/viewer-p
 import { collisionPanel, collisionPanelToggleButton, collisionResultsList, collisionSummary, currentModelTransforms, currentModels, helpPanel, jsPDF, loadedModels, materialsPanel, materialsPanelToggleButton, setExplorerTabsAccess, transformPanel, transformPanelToggleButton, viewer, xktLoader } from "../viewer-authenticated.js";
 import { scheduleExplorerRefresh } from "./explorer.js";
 import { getMetaObjectNetworkInfo, resolveSceneObjectId } from "./ifc-meta.js";
-import { extractNumericPropertyValue, normalizeQuantityByIfcType } from "./materials.js";
+import { extractNumericPropertyValue, getSectionVisibleFraction, normalizeQuantityByIfcType } from "./materials.js";
 import { hideCollisionPanel, hidePanelElement, setupDraggablePanel } from "./panels.js";
 import { requestRenderFrame } from "./performance.js";
 import { getAllObjectIds } from "./scene-objects.js";
@@ -186,6 +186,7 @@ export function setCivilFeatureAccess(isAllowed) {
             isItemsPropertySet: (pset) => /itens[ _-]?associados|associated items/i.test(String(pset?.name || pset?.id || "")),
             readNumber: extractNumericPropertyValue,
             normalizeQuantity: normalizeQuantityByIfcType,
+            getVisibleFraction: (objectId) => getSectionVisibleFraction(objectId),
             requestRenderFrame
         }))
         .then((feature) => {

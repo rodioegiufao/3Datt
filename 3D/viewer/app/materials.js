@@ -8,7 +8,7 @@ import { requestRenderFrame } from "./performance.js";
 import { ensureBudgetAssociationsLoaded, getAssociatedMaterialsByBudgetReference } from "./project-budget.js";
 import { getAllObjectIds, getObjectMetaModelId, mergeAABBs } from "./scene-objects.js";
 import { toArraySafe } from "./snapshots.js";
-import { modelIsolateController, sectionPlaneEnabled } from "./treeview-section.js";
+import { modelIsolateController } from "./treeview-section.js";
 
 export let explicitLinearMaterials = new Set();
 export let explicitLinearMaterialsLoadPromise = null;
@@ -408,10 +408,8 @@ export function normalizeMaterialToken(value) {
 
 // ---- Lista de materiais com corte ativo — NOVO
 /** Planos de corte ativos (o xeokit esconde o ponto P quando dot(−dir, P − pos) > 0). */
+// Todos os cortes ativos: plano horizontal e as seis faces da caixa de corte
 export function getActiveSectionPlanes() {
-    if (!sectionPlaneEnabled) {
-        return [];
-    }
     return Object.values(viewer.scene?.sectionPlanes || {})
         .filter((plane) => plane && typeof plane === "object" && plane.active && plane.pos && plane.dir);
 }
