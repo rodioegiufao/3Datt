@@ -2,7 +2,8 @@
 import { RESTRICTED_EXPLORER_TABS, getViewerPermissions } from "../core/viewer-permissions.js";
 import { collisionPanel, collisionPanelToggleButton, collisionResultsList, collisionSummary, currentModelTransforms, currentModels, helpPanel, jsPDF, loadedModels, materialsPanel, materialsPanelToggleButton, setExplorerTabsAccess, transformPanel, transformPanelToggleButton, viewer, xktLoader } from "../viewer-authenticated.js";
 import { scheduleExplorerRefresh } from "./explorer.js";
-import { resolveSceneObjectId } from "./ifc-meta.js";
+import { getMetaObjectNetworkInfo, resolveSceneObjectId } from "./ifc-meta.js";
+import { extractNumericPropertyValue, normalizeQuantityByIfcType } from "./materials.js";
 import { hideCollisionPanel, hidePanelElement, setupDraggablePanel } from "./panels.js";
 import { requestRenderFrame } from "./performance.js";
 import { getAllObjectIds } from "./scene-objects.js";
@@ -162,6 +163,44 @@ export function setWifiCoverageFeatureAccess(isAllowed) {
             console.error("[wifi] Falha ao carregar módulo de cobertura:", error);
         });
 }
+// Instalações civis (HID, IRRI, GLP, PLU, SAN, INC): carregado sob demanda, mesmo acesso dos materiais
+let civilFeaturePromise = null;
+export function setCivilFeatureAccess(isAllowed) {
+    if (!isAllowed) {
+        civilFeaturePromise?.then((feature) => feature?.disable());
+        return;
+    }
+    if (civilFeaturePromise) {
+        civilFeaturePromise.then((feature) => feature?.enable());
+        return;
+    }
+    civilFeaturePromise = import("../features/civil/civil-quantities.js")
+        .then(({ createCivilQuantitiesFeature }) => createCivilQuantitiesFeature({
+            viewer,
+            getModels: () => currentModels,
+            // Sub-rede = propriedade "Rede" da peça (a mesma da aba "Redes" do Explorador)
+            getSubnetwork: (metaObject) => {
+                const { network } = getMetaObjectNetworkInfo(metaObject);
+                return network && network !== "Sem rede" ? network : "";
+            },
+            isItemsPropertySet: (pset) => /itens[ _-]?associados|associated items/i.test(String(pset?.name || pset?.id || "")),
+            readNumber: extractNumericPropertyValue,
+            normalizeQuantity: normalizeQuantityByIfcType,
+            requestRenderFrame
+        }))
+        .then((feature) => {
+            setupDraggablePanel({
+                panel: feature.panel,
+                storageKey: `civilPanelPosition:${window.location.pathname}`,
+                ignoreSelectors: "input, button, textarea, select, a, .civil-list"
+            });
+            return feature;
+        })
+        .catch((error) => {
+            civilFeaturePromise = null;
+            console.error("[instalações civis] Falha ao carregar o módulo:", error);
+        });
+}
 export function updateRestrictedFeatureHelp() {
     const materialsShortcuts = new Set(["l", "t", "k", "7"]);
     helpPanel?.querySelectorAll("li").forEach((item) => {
@@ -180,6 +219,7 @@ export function applyViewerProfilePermissions(user) {
     setExplorerTabsAccess(permissions.explorerTabs);   
     quadroFeatureAllowed = Boolean(permissions.canGenerateQuadro);   // NOVO
     setWifiCoverageFeatureAccess(permissions.canUseCoverage);        // NOVO
+    setCivilFeatureAccess(permissions.canUseMaterials);
     // NOVO: substituir modelo. Se o viewer-permissions.js ainda for a versão antiga (sem canReplaceModels),
     // vale a mesma regra da cobertura (admin e colaborador).
     const canReplaceModels = Boolean(permissions.canReplaceModels ?? permissions.canUseCoverage);
