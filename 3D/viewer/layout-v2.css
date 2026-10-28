@@ -1,0 +1,1523 @@
+/* =====================================================================
+   Layout v2 — interface mais limpa para o visualizador 3D
+   Carregado DEPOIS de styles.css / styles-mobile.css. Só sobrescreve
+   aparência; nenhuma regra muda o comportamento do viewer.
+   Para voltar ao layout antigo, basta remover o <link> e o <script>
+   do layout-v2 do HTML.
+   ===================================================================== */
+
+:root {
+    --ui-font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+    /* Grafite neutro: a interface fica em segundo plano e o modelo é o destaque */
+    --ui-surface: rgba(26, 28, 32, 0.88);
+    --ui-surface-solid: #1a1c20;
+    --ui-raised: rgba(255, 255, 255, 0.06);
+    --ui-hover: rgba(255, 255, 255, 0.09);
+    --ui-border: rgba(255, 255, 255, 0.08);
+    --ui-text: #eceef1;
+    --ui-text-muted: rgba(236, 238, 241, 0.58);
+
+    /* Estado ativo = invertido (claro sobre escuro), sem cor extra competindo com o modelo */
+    --ui-active-bg: #eceef1;
+    --ui-active-fg: #17191c;
+    --ui-focus: #8fc1ff;
+
+    --ui-radius-lg: 14px;
+    --ui-radius-md: 10px;
+    --ui-radius-sm: 7px;
+    --ui-shadow: 0 10px 30px rgba(10, 12, 16, 0.28);
+    --ui-blur: blur(14px) saturate(140%);
+
+    /* Escala de camadas (mantém compatível com os valores altos do styles.css) */
+    --z-hud: 100001;
+    --z-panel: 100010;
+    --z-tooltip: 400000;
+}
+
+/* ---------------------------------------------------------------------
+   Barra de ferramentas
+   --------------------------------------------------------------------- */
+
+#toolbar {
+    font-family: var(--ui-font);
+}
+
+body:not([data-mode="mobile"]) #toolbar {
+    top: 16px;
+    gap: 2px;
+    padding: 6px;
+    align-items: center;
+    background: var(--ui-surface);
+    border: 1px solid var(--ui-border);
+    border-radius: var(--ui-radius-lg);
+    box-shadow: var(--ui-shadow);
+    backdrop-filter: var(--ui-blur);
+    -webkit-backdrop-filter: var(--ui-blur);
+}
+
+#toolbar .tool-button {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border-radius: var(--ui-radius-md);
+    color: rgba(236, 238, 241, 0.78);
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+#toolbar .tool-button:hover {
+    background-color: var(--ui-hover);
+    color: var(--ui-text);
+}
+
+#toolbar .tool-button.active,
+#toolbar .tool-button[aria-pressed="true"] {
+    background-color: var(--ui-active-bg);
+    color: var(--ui-active-fg);
+    box-shadow: none;
+}
+
+#toolbar .tool-button:focus-visible {
+    outline: 2px solid var(--ui-focus);
+    outline-offset: 2px;
+}
+
+#toolbar .tool-button .ui-icon {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.75;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* O texto do botão vira só rótulo acessível + tooltip */
+#toolbar .tool-button .tool-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+/* Divisores entre grupos de ferramentas */
+#toolbar .ui-tool-sep {
+    width: 1px;
+    height: 22px;
+    margin: 0 6px;
+    background: var(--ui-border);
+    flex: 0 0 auto;
+}
+
+body[data-mode="mobile"] #toolbar .ui-tool-sep {
+    width: 22px;
+    height: 1px;
+    margin: 4px 0;
+}
+
+body[data-mode="mobile"] #toolbar:not(.open) .ui-tool-sep {
+    display: none;
+}
+
+/* Ordem dos grupos: visualizar (medir, explorador, corte, modo leve) | ferramentas | ajuda */
+#btnMeasure { order: 2; }
+#btnToggleTree { order: 4; }
+#btnSectionPlane { order: 5; }
+#btnPerformanceMode { order: 6; }
+#toolbar .ui-tool-sep[data-after="view"] { order: 7; }
+#btnSearchToggle { order: 8; }
+#btnTransformPanel { order: 9; }
+#btnCollisionPanel { order: 10; }
+#btnMaterialsPanel { order: 11; }
+#btnAnnotationClick { order: 12; }
+#btnWifiCoverage { order: 13; }
+#toolbar .tool-button:not([id]) { order: 13; }
+#toolbar .ui-tool-sep[data-after="tools"] { order: 14; }
+#btnHelp { order: 15; }
+
+/* Tooltip rápido (substitui o title nativo, que demora a aparecer) */
+.ui-tooltip {
+    position: fixed;
+    z-index: var(--z-tooltip);
+    padding: 6px 9px;
+    border-radius: var(--ui-radius-sm);
+    background: var(--ui-surface-solid);
+    border: 1px solid var(--ui-border);
+    color: var(--ui-text);
+    font: 500 12px/1.3 var(--ui-font);
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(-2px);
+    transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.ui-tooltip.is-visible {
+    opacity: 1;
+    transform: none;
+}
+
+/* ---------------------------------------------------------------------
+   Elementos que saem da tela
+   --------------------------------------------------------------------- */
+
+/* Versão computador/celular agora é detectada automaticamente */
+#modeSwitcher {
+    display: none !important;
+}
+
+/* Assinatura do criador: sempre visível, mas sem competir com o modelo */
+#creditNote {
+    left: 50%;
+    right: auto;
+    bottom: 14px;
+    transform: translateX(-50%);
+    padding: 5px 12px;
+    border: 1px solid var(--ui-border);
+    border-radius: 999px;
+    background: var(--ui-surface);
+    color: var(--ui-text-muted);
+    font: 500 12px/1.3 var(--ui-font);
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    box-shadow: none;
+    backdrop-filter: var(--ui-blur);
+    -webkit-backdrop-filter: var(--ui-blur);
+    pointer-events: none;
+    user-select: none;
+    z-index: var(--z-hud);
+}
+
+body[data-mode="mobile"] #creditNote {
+    display: block;
+    left: 12px;
+    bottom: 12px;
+    transform: none;
+    max-width: calc(100% - 150px);
+    white-space: normal;
+    font-size: 11px;
+    border-radius: var(--ui-radius-md);
+}
+
+/* Cubo de navegação: discreto até o mouse passar por cima */
+#myNavCubeCanvas {
+    bottom: 16px;
+    right: 12px;
+    opacity: 0.55;
+    filter: saturate(0.25);
+    transition: opacity 0.2s ease, filter 0.2s ease;
+}
+
+#myNavCubeCanvas:hover {
+    opacity: 1;
+    filter: none;
+}
+
+body[data-mode="mobile"] #myNavCubeCanvas {
+    bottom: 16px;
+    right: 8px;
+}
+
+/* ---------------------------------------------------------------------
+   Painéis flutuantes: mesma "família" visual
+   --------------------------------------------------------------------- */
+
+#treeViewContainer,
+#helpPanel,
+#searchBar,
+#collisionPanel,
+#materialsPanel,
+#transformPanel,
+#propertyPanel,
+#wifiCoveragePanel,
+#webBudgetPanel {
+    font-family: var(--ui-font);
+    color: var(--ui-text);
+    background: var(--ui-surface);
+    border: 1px solid var(--ui-border);
+    border-radius: var(--ui-radius-lg);
+    box-shadow: var(--ui-shadow);
+    backdrop-filter: var(--ui-blur);
+    -webkit-backdrop-filter: var(--ui-blur);
+}
+
+#helpPanel kbd {
+    display: inline-block;
+    min-width: 20px;
+    padding: 1px 6px;
+    border-radius: 5px;
+    border: 1px solid var(--ui-border);
+    background: var(--ui-raised);
+    font: 600 11px/1.6 var(--ui-font);
+    text-align: center;
+}
+
+/* Botões de fechar (✕) iguais em todos os painéis */
+#closeTreeView,
+#closeHelpPanel,
+#closeSearchBar,
+#closeCollisionPanel,
+#closeMaterialsPanel,
+#closeTransformPanel,
+.wifi-close {
+    width: 30px;
+    height: 30px;
+    padding: 0 !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none !important;
+    border-radius: var(--ui-radius-sm) !important;
+    background: transparent !important;
+    color: var(--ui-text-muted) !important;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+#closeTreeView:hover,
+#closeHelpPanel:hover,
+#closeSearchBar:hover,
+#closeCollisionPanel:hover,
+#closeMaterialsPanel:hover,
+#closeTransformPanel:hover,
+.wifi-close:hover {
+    background: var(--ui-hover) !important;
+    color: var(--ui-text) !important;
+}
+
+/* Campos e botões primários dos painéis */
+#searchBar input,
+#materialsPanel input,
+#collisionPanel input,
+#collisionPanel select,
+#transformPanel input,
+#transformPanel select {
+    border-radius: var(--ui-radius-sm);
+    border: 1px solid var(--ui-border);
+    background: rgba(0, 0, 0, 0.28);
+    color: var(--ui-text);
+    font-family: var(--ui-font);
+}
+
+#searchBar input:focus-visible,
+#materialsPanel input:focus-visible,
+#collisionPanel input:focus-visible,
+#transformPanel input:focus-visible {
+    outline: 2px solid var(--ui-focus);
+    outline-offset: 1px;
+}
+
+.search-bar .search-action,
+#materialsSearchButton,
+#generateMaterialsList,
+#runCollisionCheck,
+#applyTransformButton {
+    border: none;
+    border-radius: var(--ui-radius-sm);
+    background: var(--ui-active-bg);
+    color: var(--ui-active-fg);
+    font-weight: 600;
+    box-shadow: none;
+}
+
+.search-bar .search-action:hover,
+#materialsSearchButton:hover,
+#generateMaterialsList:hover,
+#runCollisionCheck:hover,
+#applyTransformButton:hover {
+    background: #ffffff;
+}
+
+/* ---------------------------------------------------------------------
+   Explorador (painel da esquerda)
+   Mesma linguagem da barra: grafite, cantos de 14/10/7px, estado ativo
+   invertido, ícones de traço. Ritmo vertical em múltiplos de 4px.
+   --------------------------------------------------------------------- */
+
+#treeViewContainer.explorer-enabled {
+    top: 16px;
+    left: 16px;
+    width: 296px;
+    min-width: 260px;
+    max-height: calc(100vh - 72px);
+    padding: 12px;
+    gap: 12px;
+    overflow: hidden;
+    scrollbar-width: none;
+}
+
+/* Cabeçalho: título à esquerda, ações à direita, numa linha só */
+#treeViewContainer.explorer-enabled .tree-view-header {
+    align-items: center;
+    gap: 8px;
+    min-height: 30px;
+    padding: 0 0 0 4px;
+}
+
+#treeViewContainer.explorer-enabled .tree-view-header > div:first-child {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+#treeViewContainer.explorer-enabled .tree-view-title {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+}
+
+/* A aba ativa já diz o que está sendo listado: o subtítulo só repetia */
+#treeViewContainer.explorer-enabled .tree-view-subtitle {
+    display: none;
+}
+
+#treeViewContainer.explorer-enabled .tree-view-actions {
+    gap: 2px;
+    flex: 0 0 auto;
+}
+
+#treeViewContainer.explorer-enabled #toggleTreeViewSelection {
+    height: 30px;
+    border: none;
+    border-radius: var(--ui-radius-sm);
+    background: transparent;
+    padding: 0 8px;
+    color: var(--ui-text-muted);
+    font: 500 12px var(--ui-font);
+    white-space: nowrap;
+}
+
+#treeViewContainer.explorer-enabled #toggleTreeViewSelection:hover {
+    background: var(--ui-hover);
+    color: var(--ui-text);
+}
+
+/* Abas: grade 3×2 com colunas iguais, alinhadas entre as duas linhas */
+#treeViewContainer.explorer-enabled .explorer-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 2px;
+    padding: 3px;
+    border-radius: var(--ui-radius-md);
+    background: rgba(0, 0, 0, 0.22);
+}
+
+#treeViewContainer.explorer-enabled .explorer-tab-button {
+    min-width: 0;
+    height: 28px;
+    border: none;
+    border-radius: var(--ui-radius-sm);
+    padding: 0 6px;
+    background: transparent;
+    color: var(--ui-text-muted);
+    font: 500 12px/28px var(--ui-font);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-shadow: none;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+#treeViewContainer.explorer-enabled .explorer-tab-button:hover {
+    background: var(--ui-hover);
+    color: var(--ui-text);
+}
+
+#treeViewContainer.explorer-enabled .explorer-tab-button.is-active {
+    background: var(--ui-active-bg);
+    color: var(--ui-active-fg);
+    font-weight: 600;
+    box-shadow: none;
+}
+
+#treeViewContainer.explorer-enabled .explorer-tab-button:focus-visible {
+    outline: 2px solid var(--ui-focus);
+    outline-offset: 1px;
+}
+
+#treeViewContainer.explorer-enabled .explorer-tab-panel {
+    gap: 6px;
+}
+
+/* Contagem: rótulo pequeno de seção, alinhado com o texto das linhas */
+#treeViewContainer.explorer-enabled .explorer-tab-summary {
+    padding: 0 4px;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: var(--ui-text-muted);
+}
+
+#treeViewContainer.explorer-enabled .explorer-tab-list {
+    gap: 0;
+    margin: 0 -4px;
+    padding: 0 4px 8px;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+
+#treeViewContainer.explorer-enabled .explorer-tab-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+#treeViewContainer.explorer-enabled .explorer-tab-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#treeViewContainer.explorer-enabled .explorer-tab-list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.16);
+    border-radius: 999px;
+}
+
+/* Linhas: altura fixa de 44px, sem caixa, destaque só no hover */
+#treeViewContainer.explorer-enabled .explorer-list-item,
+#treeViewContainer.explorer-enabled .explorer-list-item.has-model-tools {
+    position: relative;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    gap: 6px;
+    min-height: 44px;
+    padding: 0 4px;
+    border: none !important;
+    border-radius: var(--ui-radius-sm);
+    background: transparent;
+    box-shadow: none;
+}
+
+#treeViewContainer.explorer-enabled .explorer-list-item:hover,
+#treeViewContainer.explorer-enabled .explorer-list-item:focus-within {
+    background: var(--ui-hover);
+    box-shadow: none;
+}
+
+#treeViewContainer.explorer-enabled .explorer-visibility-toggle {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+    align-self: center;
+    border-radius: var(--ui-radius-sm);
+}
+
+#treeViewContainer.explorer-enabled .explorer-visibility-toggle:hover {
+    transform: none;
+}
+
+#treeViewContainer.explorer-enabled .explorer-visibility-toggle:focus-visible {
+    outline: 2px solid var(--ui-focus);
+    outline-offset: 0;
+}
+
+#treeViewContainer.explorer-enabled .explorer-visibility-icon {
+    width: 15px;
+    height: 15px;
+    border-radius: 4px;
+    border: 1.5px solid rgba(236, 238, 241, 0.35);
+    background: transparent;
+    color: var(--ui-active-fg);
+    font-size: 10px;
+    font-weight: 700;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+#treeViewContainer.explorer-enabled .explorer-visibility-toggle.is-active .explorer-visibility-icon {
+    border-color: rgba(236, 238, 241, 0.9);
+    background: rgba(236, 238, 241, 0.9);
+    color: var(--ui-active-fg);
+    box-shadow: none;
+}
+
+/* Modelo oculto: o nome também esmaece, para ler o estado sem olhar a caixa */
+#treeViewContainer.explorer-enabled .explorer-visibility-toggle:not(.is-active) + .explorer-list-item-action {
+    opacity: 0.5;
+}
+
+#treeViewContainer.explorer-enabled .explorer-list-item-action {
+    align-self: stretch;
+    gap: 8px;
+    font: inherit;
+}
+
+#treeViewContainer.explorer-enabled .explorer-list-item-action:focus-visible {
+    outline: none;
+}
+
+#treeViewContainer.explorer-enabled .explorer-list-item-text {
+    gap: 2px;
+    justify-content: center;
+}
+
+#treeViewContainer.explorer-enabled .explorer-list-item-primary {
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.25;
+    color: var(--ui-text);
+}
+
+#treeViewContainer.explorer-enabled .explorer-list-item-secondary {
+    font-size: 11px;
+    font-weight: 400;
+    line-height: 1.25;
+    color: var(--ui-text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+#treeViewContainer.explorer-enabled .explorer-list-item-badge {
+    padding: 2px 7px;
+    background: var(--ui-raised);
+    color: var(--ui-text-muted);
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: none;
+    box-shadow: none;
+}
+
+/* Botões da linha (substituir / restaurar modelo): mesmos ícones da barra,
+   aparecem ao passar o mouse; em telas de toque ficam sempre visíveis */
+#treeViewContainer.explorer-enabled .explorer-model-tools {
+    gap: 2px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+#treeViewContainer.explorer-enabled .explorer-list-item:hover .explorer-model-tools,
+#treeViewContainer.explorer-enabled .explorer-list-item:focus-within .explorer-model-tools,
+#treeViewContainer.explorer-enabled .is-local-model .explorer-model-tools {
+    opacity: 1;
+}
+
+@media (hover: none) {
+    #treeViewContainer.explorer-enabled .explorer-model-tools {
+        opacity: 1;
+    }
+}
+
+#treeViewContainer.explorer-enabled .explorer-model-tools button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    border-radius: var(--ui-radius-sm);
+    background: transparent;
+    color: var(--ui-text-muted);
+}
+
+#treeViewContainer.explorer-enabled .explorer-model-tools button:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--ui-text);
+}
+
+#treeViewContainer.explorer-enabled .explorer-model-tools button:focus-visible {
+    outline: 2px solid var(--ui-focus);
+    outline-offset: 0;
+}
+
+#treeViewContainer.explorer-enabled .explorer-model-tools svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.75;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* Modelo substituído por arquivo local: marca âmbar discreta à esquerda */
+#treeViewContainer.explorer-enabled .explorer-model-tools button.is-local {
+    color: #f2b94b;
+}
+
+#treeViewContainer.explorer-enabled .explorer-model-item.is-local-model::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 10px;
+    bottom: 10px;
+    width: 2px;
+    border-radius: 2px;
+    background: #f2b94b;
+}
+
+/* Grupos (Objetos, Classes, Pavimentos, Redes, Peças) */
+#treeViewContainer.explorer-enabled .explorer-tree-group {
+    gap: 0;
+}
+
+#treeViewContainer.explorer-enabled .explorer-tree-group-children {
+    gap: 0;
+    padding-left: 8px;
+    margin-left: 18px;
+    border-left: 1px solid var(--ui-border);
+}
+
+#treeViewContainer.explorer-enabled .explorer-tree-leaf {
+    width: 100%;
+}
+
+body[data-mode="mobile"] #treeViewContainer.explorer-enabled {
+    top: 12px;
+    left: 12px;
+    max-width: calc(100vw - 88px);
+    max-height: calc(100vh - 80px);
+    max-height: calc(100dvh - 80px);
+}
+
+/* ---------------------------------------------------------------------
+   Selo do usuário (canto superior direito)
+   --------------------------------------------------------------------- */
+
+.viewer-user-badge {
+    background: var(--ui-surface);
+    border: 1px solid var(--ui-border);
+    box-shadow: var(--ui-shadow);
+    font-family: var(--ui-font);
+    font-weight: 600;
+    font-size: 12px;
+}
+
+/* ---------------------------------------------------------------------
+   Movimento reduzido
+   --------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+    #toolbar .tool-button,
+    .ui-tooltip,
+    #myNavCubeCanvas,
+    #treeViewContainer.explorer-enabled .explorer-tab-button {
+        transition: none;
+    }
+}
+
+/* ---------------------------------------------------------------------
+   Ajustes finos
+   --------------------------------------------------------------------- */
+
+/* Celular: botão "mais ferramentas" na mesma linguagem da barra */
+body[data-mode="mobile"] #mobileToolbarToggle {
+    border: 1px solid var(--ui-border);
+    border-radius: var(--ui-radius-lg);
+    background: var(--ui-surface);
+    box-shadow: var(--ui-shadow);
+    backdrop-filter: var(--ui-blur);
+    -webkit-backdrop-filter: var(--ui-blur);
+}
+
+body[data-mode="mobile"] #toolbar.open {
+    background: var(--ui-surface);
+    border: 1px solid var(--ui-border);
+    border-radius: var(--ui-radius-lg);
+    box-shadow: var(--ui-shadow);
+    backdrop-filter: var(--ui-blur);
+    -webkit-backdrop-filter: var(--ui-blur);
+}
+
+body[data-mode="mobile"] #toolbar.open {
+    max-height: calc(100vh - 160px);
+    max-height: calc(100dvh - 160px);
+}
+
+/* Ícone do botão de ferramentas no celular (SVG no lugar do PNG) */
+body.ui-v2 #mobileToolbarToggle .tool-toggle-icon {
+    display: none !important;
+}
+
+#mobileToolbarToggle .ui-icon {
+    width: 22px;
+    height: 22px;
+    fill: none;
+    stroke: var(--ui-text);
+    stroke-width: 1.75;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+#mobileToolbarToggle .ui-icon-close,
+#mobileToolbarToggle[aria-pressed="true"] .ui-icon-open {
+    display: none;
+}
+
+#mobileToolbarToggle[aria-pressed="true"] .ui-icon-close {
+    display: block;
+}
+
+/* ---------------------------------------------------------------------
+   Medir: menu com Distância / Ângulo
+   --------------------------------------------------------------------- */
+
+#toolbar .tool-button.ui-merged {
+    display: none !important;
+}
+
+.ui-measure-menu {
+    position: fixed;
+    z-index: var(--z-tooltip);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 210px;
+    padding: 5px;
+    border: 1px solid var(--ui-border);
+    border-radius: var(--ui-radius-md);
+    background: var(--ui-surface-solid);
+    box-shadow: var(--ui-shadow);
+    font-family: var(--ui-font);
+}
+
+.ui-measure-menu[hidden] {
+    display: none;
+}
+
+.ui-measure-menu button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 10px;
+    border: none;
+    border-radius: var(--ui-radius-sm);
+    background: transparent;
+    color: var(--ui-text);
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+}
+
+.ui-measure-menu button:hover,
+.ui-measure-menu button:focus-visible {
+    background: var(--ui-hover);
+    outline: none;
+}
+
+.ui-measure-menu button[aria-checked="true"] {
+    background: var(--ui-active-bg);
+    color: var(--ui-active-fg);
+}
+
+.ui-measure-menu .ui-icon {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.75;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.ui-measure-menu strong {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.ui-measure-menu small {
+    display: block;
+    font-size: 11px;
+    opacity: 0.65;
+}
+
+.ui-measure-menu .ui-measure-stop {
+    justify-content: center;
+    margin-top: 3px;
+    border-top: 1px solid var(--ui-border);
+    border-radius: 0 0 var(--ui-radius-sm) var(--ui-radius-sm);
+    color: var(--ui-text-muted);
+    font-size: 12px;
+}
+
+.ui-measure-stop[hidden] {
+    display: none !important;
+}
+
+/* =====================================================================
+   Kit de painéis — Compatibilização, Materiais, Cobertura, Busca, Origem
+   Todos seguem a mesma estrutura:
+     cabeçalho (título 15px + subtítulo 12px + ✕)
+     campos (rótulo 12px acima, controle de 36px)
+     ações (primária clara, secundária grafite, lado a lado)
+     cartões de informação e mensagens de status
+   "body.ui-v2" garante prioridade sobre os estilos que os recursos
+   injetam no <head> depois do carregamento.
+   ===================================================================== */
+
+body.ui-v2 :is(#collisionPanel, #materialsPanel, #wifiCoveragePanel, #searchBar, #transformPanel) {
+    top: 76px;
+    right: 16px;
+    left: auto;
+    width: 340px;
+    max-width: calc(100vw - 32px);
+    max-height: calc(100vh - 140px);
+    box-sizing: border-box;
+    padding: 16px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    font: 400 13px/1.45 var(--ui-font);
+    color: var(--ui-text);
+    background: var(--ui-surface);
+    border: 1px solid var(--ui-border);
+    border-radius: var(--ui-radius-lg);
+    box-shadow: var(--ui-shadow);
+    backdrop-filter: var(--ui-blur);
+    -webkit-backdrop-filter: var(--ui-blur);
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+
+/* A busca é um painel como os outros, mas abre à esquerda (perto do Explorador) */
+body.ui-v2 #searchBar {
+    right: auto;
+    left: 16px;
+    gap: 0;
+}
+
+body.ui-v2 #searchBar[hidden],
+body.ui-v2 :is(#collisionPanel, #materialsPanel, #wifiCoveragePanel, #transformPanel)[hidden] {
+    display: none !important;
+}
+
+/* ---------- Cabeçalho ---------- */
+
+body.ui-v2 :is(.collision-panel-header, .materials-panel-header, .wifi-header, .search-panel-header, .transform-panel-header) {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 0 16px;
+    padding: 0;
+}
+
+body.ui-v2 :is(.collision-panel-title, .materials-panel-title, .wifi-title, .search-panel-title, .transform-panel-title) {
+    margin: 0;
+    font: 600 15px/1.25 var(--ui-font);
+    letter-spacing: -0.01em;
+    color: var(--ui-text);
+}
+
+body.ui-v2 :is(.collision-panel-subtitle, .materials-panel-subtitle, .wifi-subtitle, .search-panel-subtitle, .transform-panel-subtitle) {
+    margin: 2px 0 0;
+    font: 400 12px/1.35 var(--ui-font);
+    color: var(--ui-text-muted);
+    opacity: 1;
+}
+
+body.ui-v2 :is(#collisionPanel, #materialsPanel, #wifiCoveragePanel, #searchBar, #transformPanel) :is(#closeCollisionPanel, #closeMaterialsPanel, .wifi-close, #closeSearchBar, #closeTransformPanel) {
+    flex: 0 0 auto;
+    margin: -4px -6px 0 0;
+}
+
+/* ---------- Rótulos e campos ---------- */
+
+body.ui-v2 :is(#collisionPanel, #materialsPanel, #searchBar, #transformPanel) :is(label.collision-label, label.transform-label, label.transform-field) {
+    display: block;
+    margin: 0 0 12px;
+    font: 500 12px/1.3 var(--ui-font);
+    color: var(--ui-text-muted);
+    opacity: 1;
+}
+
+/* Na Cobertura o rótulo vem antes do <select> (irmãos), nos outros o envolve */
+body.ui-v2 #wifiCoveragePanel > label:not(.wifi-check),
+body.ui-v2 #wifiCoveragePanel [data-section] > label:not(.wifi-check),
+body.ui-v2 #wifiCoveragePanel .wifi-row label {
+    display: block;
+    margin: 0 0 6px;
+    font: 500 12px/1.3 var(--ui-font);
+    color: var(--ui-text-muted);
+    opacity: 1;
+}
+
+body.ui-v2 #wifiCoveragePanel > select,
+body.ui-v2 #wifiCoveragePanel [data-section] > select,
+body.ui-v2 #wifiCoveragePanel .wifi-row select {
+    margin-bottom: 12px;
+}
+
+body.ui-v2 :is(#collisionPanel, #materialsPanel, #wifiCoveragePanel, #searchBar, #transformPanel) :is(select, input[type="text"], input[type="search"], input[type="number"], input:not([type])) {
+    display: block;
+    width: 100%;
+    height: 36px;
+    box-sizing: border-box;
+    margin-top: 6px;
+    padding: 0 10px;
+    border: 1px solid var(--ui-border);
+    border-radius: var(--ui-radius-sm);
+    background-color: rgba(0, 0, 0, 0.28);
+    color: var(--ui-text);
+    font: 400 13px var(--ui-font);
+    box-shadow: none;
+    outline: none;
+}
+
+body.ui-v2 :is(#collisionPanel, #materialsPanel, #wifiCoveragePanel, #searchBar, #transformPanel) select {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 30px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23eceef1' stroke-opacity='.6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 14px;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+
+body.ui-v2 :is(#collisionPanel, #materialsPanel, #wifiCoveragePanel, #searchBar, #transformPanel) select option {
+    background: var(--ui-surface-solid);
+    color: var(--ui-text);
+}
+
+body.ui-v2 :is(#collisionPanel, #materialsPanel, #wifiCoveragePanel, #searchBar, #transformPanel) :is(select, input):hover {
+    border-color: rgba(255, 255, 255, 0.16);
+}
+
+body.ui-v2 :is(#collisionPanel, #materialsPanel, #wifiCoveragePanel, #searchBar, #transformPanel) :is(select, input):focus-visible {
+    border-color: var(--ui-focus);
+    box-shadow: 0 0 0 1px var(--ui-focus);
+}
+
+body.ui-v2 :is(#collisionPanel, #materialsPanel, #wifiCoveragePanel, #searchBar, #transformPanel) input::placeholder {
+    color: rgba(236, 238, 241, 0.38);
+}
+
+/* Campos lado a lado */
+body.ui-v2 #collisionPanel .clash-groups {
+    grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr);
+    gap: 6px;
+    align-items: center;
+}
+
+body.ui-v2 #collisionPanel .clash-groups > span {
+    padding-top: 6px;
+    text-align: center;
+    color: var(--ui-text-muted);
+}
+
+body.ui-v2 #collisionPanel .clash-groups .collision-label {
+    margin-bottom: 0;
+}
+
+body.ui-v2 :is(#wifiCoveragePanel .wifi-row, #transformPanel .transform-grid) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+    gap: 8px;
+}
+
+/* Caixas de seleção */
+body.ui-v2 #wifiCoveragePanel .wifi-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 12px;
+    font: 400 13px var(--ui-font);
+    color: var(--ui-text);
+    cursor: pointer;
+}
+
+body.ui-v2 :is(#collisionPanel, #wifiCoveragePanel) input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    margin: 0;
+    accent-color: var(--ui-active-bg);
+}
+
+/* ---------- Abas internas (Wi-Fi / Câmeras): mesmas do Explorador ---------- */
+
+body.ui-v2 #wifiCoveragePanel .wifi-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+    margin: 0 0 16px;
+    padding: 3px;
+    border-radius: var(--ui-radius-md);
+    background: rgba(0, 0, 0, 0.22);
+}
+
+body.ui-v2 #wifiCoveragePanel .wifi-tabs button {
+    height: 28px;
+    padding: 0 8px;
+    border: none;
+    border-radius: var(--ui-radius-sm);
+    background: transparent;
+    color: var(--ui-text-muted);
+    font: 500 12px var(--ui-font);
+    cursor: pointer;
+}
+
+body.ui-v2 #wifiCoveragePanel .wifi-tabs button:hover {
+    background: var(--ui-hover);
+    color: var(--ui-text);
+}
+
+body.ui-v2 #wifiCoveragePanel .wifi-tabs button.is-active {
+    background: var(--ui-active-bg);
+    color: var(--ui-active-fg);
+    font-weight: 600;
+}
+
+/* ---------- Botões ---------- */
+
+/* Grupo de ações: botões lado a lado, mesma largura */
+body.ui-v2 :is(#collisionPanel .collision-actions, #materialsPanel .materials-actions, #wifiCoveragePanel .wifi-actions, #transformPanel .transform-actions) {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: 8px;
+    margin: 4px 0 12px;
+}
+
+body.ui-v2 :is(#collisionPanel, #materialsPanel, #wifiCoveragePanel, #searchBar, #transformPanel) :is(.collision-actions, .materials-actions, .wifi-actions, .transform-actions) > [hidden] {
+    display: none !important;
+}
+
+/* Secundário (padrão) */
+body.ui-v2 :is(#collisionPanel, #materialsPanel, #wifiCoveragePanel, #searchBar, #transformPanel) :is(.collision-actions, .materials-actions, .wifi-actions, .transform-actions, .search-panel-controls, .materials-search, .clash-navigation, .clash-type-tools) button,
+body.ui-v2 #wifiCoveragePanel .wifi-diag button,
+body.ui-v2 #wifiCoveragePanel .wifi-cam-item :is(.wifi-diag-btn, .wifi-aim) {
+    height: 36px;
+    min-width: 0;
+    margin: 0;
+    padding: 0 14px;
+    border: 1px solid var(--ui-border);
+    border-radius: var(--ui-radius-sm);
+    background: var(--ui-raised);
+    color: var(--ui-text);
+    font: 600 13px var(--ui-font);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-shadow: none;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+body.ui-v2 :is(#collisionPanel, #materialsPanel, #wifiCoveragePanel, #searchBar, #transformPanel) :is(.collision-actions, .materials-actions, .wifi-actions, .transform-actions, .search-panel-controls, .materials-search, .clash-navigation, .clash-type-tools) button:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.14);
+}
+
+/* Primário: a ação principal de cada painel */
+body.ui-v2 :is(#runCollisionCheck, #generateMaterialsList, #wifiRun, #btnSearchId, #applyTransformButton) {
+    border-color: var(--ui-active-bg) !important;
+    background: var(--ui-active-bg) !important;
+    color: var(--ui-active-fg) !important;
+}
+
+body.ui-v2 :is(#runCollisionCheck, #generateMaterialsList, #wifiRun, #btnSearchId, #applyTransformButton):hover:not(:disabled) {
+    border-color: #ffffff !important;
+    background: #ffffff !important;
+}
+
+body.ui-v2 :is(#collisionPanel, #materialsPanel, #wifiCoveragePanel, #searchBar, #transformPanel) button:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+body.ui-v2 #wifiCoveragePanel .wifi-run:disabled {
+    cursor: wait;
+}
+
+body.ui-v2 :is(#collisionPanel, #materialsPanel, #wifiCoveragePanel, #searchBar, #transformPanel) button:focus-visible {
+    outline: 2px solid var(--ui-focus);
+    outline-offset: 2px;
+}
+
+/* Botões pequenos (dentro de listas e filtros) */
+body.ui-v2 #collisionPanel .clash-type-tools button,
+body.ui-v2 #wifiCoveragePanel .wifi-diag button,
+body.ui-v2 #wifiCoveragePanel .wifi-cam-item :is(.wifi-diag-btn, .wifi-aim) {
+    height: 28px;
+    padding: 0 10px;
+    font-size: 12px;
+}
+
+body.ui-v2 #wifiCoveragePanel .wifi-cam-item :is(.wifi-diag-btn, .wifi-aim).is-aiming {
+    border-color: #f2b94b;
+    background: rgba(242, 185, 75, 0.18);
+    color: #f2b94b;
+}
+
+/* Campo + botão na mesma linha (Buscar peça, Buscar material, filtros da Compatibilização) */
+body.ui-v2 :is(#searchBar .search-panel-controls, #materialsPanel .materials-search, #collisionPanel .clash-filters) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    margin: 0 0 12px;
+}
+
+body.ui-v2 :is(#searchBar .search-panel-controls, #materialsPanel .materials-search, #collisionPanel .clash-filters) :is(input, select) {
+    margin-top: 0;
+}
+
+body.ui-v2 #collisionPanel .clash-filters select {
+    width: 128px;
+}
+
+/* Navegação entre interferências */
+body.ui-v2 #collisionPanel .clash-navigation {
+    display: grid;
+    grid-template-columns: 36px 1fr 36px;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 12px;
+}
+
+body.ui-v2 #collisionPanel .clash-navigation[hidden] {
+    display: none;
+}
+
+body.ui-v2 #collisionPanel .clash-navigation button {
+    width: 36px;
+    padding: 0;
+}
+
+body.ui-v2 #collisionPanel .clash-navigation strong {
+    text-align: center;
+    font: 600 13px var(--ui-font);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Cartões e blocos de informação ---------- */
+
+body.ui-v2 :is(#wifiCoveragePanel .wifi-card, #collisionPanel .clash-type-filter, #collisionPanel .clash-detail, #materialsPanel .materials-ids-panel) {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--ui-border);
+    border-radius: var(--ui-radius-md);
+    background: rgba(255, 255, 255, 0.04);
+    font: 400 12px/1.5 var(--ui-font);
+    color: var(--ui-text);
+}
+
+body.ui-v2 #wifiCoveragePanel .wifi-card:empty {
+    display: none;
+}
+
+body.ui-v2 #wifiCoveragePanel .wifi-card strong,
+body.ui-v2 #wifiCoveragePanel .wifi-card b {
+    font-weight: 600;
+}
+
+body.ui-v2 #wifiCoveragePanel .wifi-ap-list button.wifi-link {
+    padding: 3px 0;
+    color: var(--ui-text);
+    font: 400 12px var(--ui-font);
+    opacity: 0.85;
+}
+
+body.ui-v2 #wifiCoveragePanel .wifi-ap-list button.wifi-link:hover {
+    opacity: 1;
+    text-decoration: underline;
+}
+
+body.ui-v2 #wifiCoveragePanel .wifi-legend div {
+    gap: 10px;
+    margin: 4px 0;
+}
+
+body.ui-v2 #wifiCoveragePanel .wifi-legend span {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+}
+
+/* Filtro de tipos IFC (Compatibilização) */
+body.ui-v2 #collisionPanel .clash-type-filters {
+    gap: 8px;
+    margin: 12px 0;
+}
+
+body.ui-v2 #collisionPanel .clash-type-filter {
+    margin: 0;
+    padding: 8px 10px;
+}
+
+body.ui-v2 #collisionPanel .clash-type-filter summary {
+    font: 500 12px var(--ui-font);
+    color: var(--ui-text-muted);
+}
+
+body.ui-v2 #collisionPanel .clash-type-list label {
+    gap: 6px;
+    font: 400 12px var(--ui-font);
+    color: var(--ui-text);
+}
+
+/* ---------- Mensagens de status e resultados ---------- */
+
+body.ui-v2 :is(#collisionSummary, #materialsSummary, #materialsIdsSummary, .wifi-status, #searchFeedback) {
+    margin: 0 0 12px;
+    font: 400 12px/1.45 var(--ui-font);
+    color: var(--ui-text-muted);
+}
+
+body.ui-v2 :is(#collisionSummary, #materialsSummary, .wifi-status, #searchFeedback):empty {
+    display: none;
+}
+
+body.ui-v2 #wifiCoveragePanel .wifi-status.is-aiming {
+    color: var(--ui-focus);
+    font-weight: 500;
+}
+
+body.ui-v2 :is(#collisionResults, #materialsResults, #materialsIdsList) {
+    margin: 0 0 12px;
+    padding: 0;
+    font: 400 13px/1.45 var(--ui-font);
+    color: var(--ui-text);
+    border: none;
+    background: transparent;
+    max-height: none;
+}
+
+body.ui-v2 :is(#collisionResults, #materialsResults):empty {
+    display: none;
+}
+
+/* Mensagem de lista vazia ("Nenhuma interferência…") */
+body.ui-v2 #collisionResults:not(:empty):not(:has(*)) {
+    color: var(--ui-text-muted);
+    padding: 10px 12px;
+    border-radius: var(--ui-radius-md);
+    background: rgba(255, 255, 255, 0.04);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+body.ui-v2 :is(#materialsResults, #materialsIdsList) li,
+body.ui-v2 #collisionResults .collision-result-item {
+    padding: 8px 4px;
+    border-bottom: 1px solid var(--ui-border);
+    font-size: 12px;
+}
+
+body.ui-v2 #wifiCoveragePanel progress {
+    width: 100%;
+    height: 4px;
+    margin: 0 0 12px;
+    appearance: none;
+    border: none;
+    border-radius: 2px;
+    background: var(--ui-raised);
+    overflow: hidden;
+}
+
+body.ui-v2 #wifiCoveragePanel progress::-webkit-progress-bar {
+    background: var(--ui-raised);
+}
+
+body.ui-v2 #wifiCoveragePanel progress::-webkit-progress-value {
+    background: var(--ui-active-bg);
+}
+
+body.ui-v2 #wifiCoveragePanel progress::-moz-progress-bar {
+    background: var(--ui-active-bg);
+}
+
+/* Último elemento sem sobra de espaço embaixo */
+body.ui-v2 :is(#collisionPanel, #materialsPanel, #wifiCoveragePanel, #searchBar, #transformPanel) > :last-child {
+    margin-bottom: 0;
+}
+
+/* Barra de rolagem fina, igual à do Explorador */
+body.ui-v2 :is(#collisionPanel, #materialsPanel, #wifiCoveragePanel, #searchBar, #transformPanel)::-webkit-scrollbar {
+    width: 6px;
+}
+
+body.ui-v2 :is(#collisionPanel, #materialsPanel, #wifiCoveragePanel, #searchBar, #transformPanel)::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+body.ui-v2 :is(#collisionPanel, #materialsPanel, #wifiCoveragePanel, #searchBar, #transformPanel)::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.16);
+    border-radius: 999px;
+}
+
+/* Celular: painel ocupa a largura útil, abaixo do topo */
+body.ui-v2[data-mode="mobile"] :is(#collisionPanel, #materialsPanel, #wifiCoveragePanel, #searchBar, #transformPanel) {
+    top: 12px;
+    left: 12px;
+    right: 72px;
+    bottom: auto;
+    width: auto;
+    max-width: none;
+    max-height: calc(100dvh - 80px);
+}
+
+/* Ajustes do kit de painéis */
+body.ui-v2 :is(#collisionPanel, #materialsPanel, #wifiCoveragePanel, #searchBar, #transformPanel) [hidden] {
+    display: none !important;
+}
+
+body.ui-v2 #wifiCoveragePanel#wifiCoveragePanel > select,
+body.ui-v2 #wifiCoveragePanel#wifiCoveragePanel [data-section] > select,
+body.ui-v2 #wifiCoveragePanel#wifiCoveragePanel .wifi-row select {
+    margin-top: 0;
+}
+
+body.ui-v2 #collisionPanel .clash-groups {
+    margin: 0 0 12px;
+}
+
+body.ui-v2 #collisionPanel#collisionPanel .clash-groups :is(label, select) {
+    margin-bottom: 0;
+}
+
+body.ui-v2 #collisionPanel .clash-type-filters {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+/* =====================================================================
+   Celular: navegação por toque, botão de vista inicial, aviso de modo leve
+   ===================================================================== */
+
+/* O navegador não rola nem dá zoom na página quando o gesto é no modelo */
+#meuCanvas {
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}
+
+.home-view-button {
+    position: fixed;
+    right: 172px;
+    bottom: 28px;
+    z-index: var(--z-hud);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 1px solid var(--ui-border);
+    border-radius: var(--ui-radius-md);
+    background: var(--ui-surface);
+    color: var(--ui-text);
+    box-shadow: var(--ui-shadow);
+    backdrop-filter: var(--ui-blur);
+    -webkit-backdrop-filter: var(--ui-blur);
+    font: 600 14px var(--ui-font);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+.home-view-button:hover {
+    background: var(--ui-surface-solid);
+}
+
+.home-view-button:active {
+    transform: scale(0.96);
+}
+
+.home-view-button:focus-visible {
+    outline: 2px solid var(--ui-focus);
+    outline-offset: 2px;
+}
+
+.home-view-button svg {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* No computador o rótulo fica só no tooltip */
+.home-view-button span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+/* No celular: botão grande, com texto, fácil de acertar com o polegar */
+body[data-mode="mobile"] .home-view-button {
+    right: 12px;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    width: auto;
+    height: 52px;
+    padding: 0 18px 0 16px;
+    border-radius: 999px;
+    background: var(--ui-active-bg);
+    border-color: var(--ui-active-bg);
+    color: var(--ui-active-fg);
+    font-size: 15px;
+}
+
+body[data-mode="mobile"] .home-view-button svg {
+    width: 22px;
+    height: 22px;
+}
+
+body[data-mode="mobile"] .home-view-button span {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip: auto;
+}
+
+/* Assinatura e cartão do link não ficam embaixo do botão no celular */
+body[data-mode="mobile"] #creditNote {
+    max-width: calc(100% - 190px);
+}
+
+body[data-mode="mobile"] .clash-link-card {
+    bottom: 76px;
+}
+
+/* Aviso "Modo leve ativado" */
+.performance-toast {
+    position: fixed;
+    left: 50%;
+    top: 76px;
+    transform: translateX(-50%);
+    z-index: var(--z-tooltip);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: calc(100vw - 32px);
+    padding: 10px 10px 10px 14px;
+    border: 1px solid var(--ui-border);
+    border-radius: var(--ui-radius-md);
+    background: var(--ui-surface-solid);
+    color: var(--ui-text);
+    box-shadow: var(--ui-shadow);
+    font: 500 13px/1.35 var(--ui-font);
+}
+
+.performance-toast button {
+    flex: 0 0 auto;
+    height: 32px;
+    padding: 0 12px;
+    border: none;
+    border-radius: var(--ui-radius-sm);
+    background: var(--ui-active-bg);
+    color: var(--ui-active-fg);
+    font: 600 12.5px var(--ui-font);
+    cursor: pointer;
+}
+
+body[data-mode="mobile"] .performance-toast {
+    top: auto;
+    bottom: 76px;
+    left: 12px;
+    right: 12px;
+    transform: none;
+    max-width: none;
+    justify-content: space-between;
+}

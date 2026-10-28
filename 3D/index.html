@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>3D | Escolha do Projeto</title>
+    <link rel="icon" href="/images/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" href="/images/favicon-32x32.png" sizes="32x32" />
+    <link rel="icon" type="image/png" href="/images/favicon-16x16.png" sizes="16x16" />
+    <style>
+        :root {
+            color-scheme: light;
+            --bg: #0f172a;
+            --card: #ffffff;
+            --text: #0f172a;
+            --muted: #475569;
+            --accent: #2563eb;
+            --accent-hover: #1d4ed8;
+            --border: #cbd5e1;
+            --success: #166534;
+            --error: #b91c1c;
+            --panel: #f8fafc;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+            font-family: Arial, sans-serif;
+            background: radial-gradient(circle at top, #1e293b, var(--bg));
+            color: var(--text);
+        }
+
+        .selector-card {
+            width: min(100%, 720px);
+            background: var(--card);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            box-shadow: 0 20px 35px rgba(0, 0, 0, 0.25);
+            padding: 28px;
+        }
+
+        h1 { margin: 0 0 8px; font-size: 1.8rem; }
+
+        .subtitle {
+            margin: 0 0 20px;
+            color: var(--muted);
+            line-height: 1.4;
+        }
+
+        .grid { display: grid; gap: 16px; }
+
+        .access-panel {
+            display: grid;
+            gap: 10px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px;
+        }
+
+        .access-panel h2,
+        .section h2 {
+            margin: 0;
+            font-size: 1rem;
+        }
+
+        .inline-controls {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 8px;
+        }
+
+        input,
+        select,
+        button {
+            width: 100%;
+            border-radius: 10px;
+            font-size: 1rem;
+        }
+
+        input,
+        select {
+            border: 1px solid var(--border);
+            padding: 12px;
+            background: #fff;
+        }
+
+        button {
+            border: 0;
+            padding: 12px;
+            cursor: pointer;
+            color: #fff;
+            font-weight: 700;
+            background: var(--accent);
+            transition: background 0.2s ease;
+        }
+
+        button:hover { background: var(--accent-hover); }
+
+        .message { margin: 0; min-height: 20px; font-size: 0.9rem; }
+
+        .message.success { color: var(--success); }
+        .message.error { color: var(--error); }
+
+        .section {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px;
+            background: #fff;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .section-label,
+        .helper-text {
+            margin: 6px 0 0;
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+
+        .project-type-controls {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .project-type-btn {
+            border: 1px solid var(--border);
+            background: #fff;
+            color: var(--text);
+            border-radius: 10px;
+            padding: 10px;
+            font-weight: 700;
+        }
+
+        .project-type-btn.active {
+            background: #dbeafe;
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .project-links {
+            margin-top: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .project-links a {
+            text-decoration: none;
+            padding: 8px 12px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 560px) {
+            .project-type-controls {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="selector-card" aria-labelledby="tituloPagina">
+        <h1 id="tituloPagina">Visualizador 3D</h1>
+        <p class="subtitle">A seleção de projetos utiliza a sessão segura do sistema.</p>
+
+        <div class="grid">
+            <section class="section hidden" id="projectSection" aria-labelledby="tituloEscolha">
+                <h2 id="tituloEscolha">Escolha o tipo de projeto</h2>
+                <p class="helper-text">Depois de liberar o acesso, escolha entre projetos públicos e privados.</p>
+
+                <div class="project-type-controls" role="group" aria-label="Tipo de projeto">
+                    <button class="project-type-btn active" id="btnPublico" type="button">Projetos públicos</button>
+                    <button class="project-type-btn" id="btnPrivado" type="button">Projetos privados</button>
+                </div>
+
+                <div style="display: grid; gap: 12px; margin-top: 12px;">
+                    <select id="pagina3d" aria-label="Escolher página HTML do projeto 3D">
+                        <option value="" selected disabled>Selecione um projeto</option>
+                    </select>
+                    <button id="irProjeto" type="button">Abrir projeto</button>
+                    <a id="authenticatedModelUpload" class="button hidden" href="/3D/ifc_upload.html">📂 Abrir modelo IFC / XKT / GLB</a>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script>
+        const PUBLIC_PROJECTS = [
+            { label: "Escola Canaã", href: "/3D/esc_canaa" },
+            { label: "sebrae-rr", href: "/3D/sebrae-rr" },
+            { label: "IPER", href: "/3D/iper" },
+            { label: "TCE", href: "/3D/TCE" },
+            { label: "LACEN", href: "/3D/lacen" },
+            { label: "Policlínica", href: "/3D/policlinica" },
+            { label: "ESC Modelo", href: "/3D/esc_modelo" },
+            { label: "Fecomercio", href: "/3D/fecomercio" },
+            { label: "SESC Centro Ecológico", href: "/3D/sesc_centro_ecologico" }
+        ];
+
+        const PRIVATE_PROJECTS = [
+            { label: "Farmácia do Jânio", href: "/3D/farmacia" },
+            { label: "Posto São Bento", href: "/3D/psb" }
+        ];
+
+        const selectProjeto = document.getElementById("pagina3d");
+        const botaoIr = document.getElementById("irProjeto");
+        const projectSection = document.getElementById("projectSection");
+        const btnPublico = document.getElementById("btnPublico");
+        const btnPrivado = document.getElementById("btnPrivado");
+        const authenticatedModelUpload = document.getElementById("authenticatedModelUpload");
+
+        let accessUnlocked = false;
+        let selectedType = "public";
+
+        function getSelectedProjects() {
+            return selectedType === "private" ? PRIVATE_PROJECTS : PUBLIC_PROJECTS;
+        }
+
+        function renderSelectOptions() {
+            const selectedProjects = getSelectedProjects();
+            const groupName = selectedType === "private" ? "Privado" : "Público";
+
+            selectProjeto.innerHTML = '<option value="" selected disabled>Selecione um projeto</option>';
+            const group = document.createElement("optgroup");
+            group.label = groupName;
+
+            selectedProjects.forEach((project) => {
+                const option = document.createElement("option");
+                option.value = project.href;
+                option.textContent = project.label;
+                group.appendChild(option);
+            });
+
+            selectProjeto.appendChild(group);
+            botaoIr.textContent = "Abrir projeto";
+        }
+
+        function updateProjectTypeButtons() {
+            btnPublico.classList.toggle("active", selectedType === "public");
+            btnPrivado.classList.toggle("active", selectedType === "private");
+        }
+
+        function updateAccessState() {
+            projectSection.classList.toggle("hidden", !accessUnlocked);
+            renderSelectOptions();
+            updateProjectTypeButtons();
+        }
+
+        async function unlockForAuthenticatedUser() {
+            try {
+                const response = await fetch("/api/auth", { credentials: "same-origin", headers: { Accept: "application/json" } });
+                const user = response.ok ? (await response.json())?.user : null;
+                if (!user || !["admin", "colaborador", "cliente"].includes(user.perfil)) {
+                    const redirect = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+                    window.location.replace(`/?login=necessario&redirect=${encodeURIComponent(redirect)}`);
+                    return;
+                }
+                accessUnlocked = true;
+                authenticatedModelUpload.classList.remove("hidden");
+                updateAccessState();
+            } catch (_error) {
+                const redirect = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+                window.location.replace(`/?login=necessario&redirect=${encodeURIComponent(redirect)}`);
+            }
+        }
+        btnPublico.addEventListener("click", () => {
+            selectedType = "public";
+            updateProjectTypeButtons();
+            renderSelectOptions();
+        });
+        unlockForAuthenticatedUser();
+
+        btnPrivado.addEventListener("click", () => {
+            selectedType = "private";
+            updateProjectTypeButtons();
+            renderSelectOptions();
+        });
+
+        botaoIr.addEventListener("click", () => {
+            if (!selectProjeto.value) {
+                selectProjeto.focus();
+                return;
+            }
+            window.location.href = selectProjeto.value;
+        });
+
+        selectProjeto.addEventListener("change", () => {
+            const selectedLabel = selectProjeto.options[selectProjeto.selectedIndex].text;
+            botaoIr.textContent = `Abrir ${selectedLabel}`;
+        });
+
+        updateAccessState();
+    </script>
+</body>
+
+</html>

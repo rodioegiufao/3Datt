@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Administração - Controle de Atividades</title>
+  <link rel="icon" href="/images/favicon.ico" sizes="any">
+  <link rel="icon" type="image/png" href="/images/favicon-32x32.png" sizes="32x32">
+  <link rel="icon" type="image/png" href="/images/favicon-16x16.png" sizes="16x16">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/atividades/style.css">
+  <link rel="stylesheet" href="/admin/style.css">
+</head>
+<body>
+  <div id="theme-selector" class="theme-selector">
+    <div class="theme-selector-content">
+      <a href="/atividades/" class="theme-logo theme-logo-link">Controle de Atividades do Setor</a>
+      <div class="theme-controls">
+        <div class="user-menu" id="userMenu" hidden>
+          <button type="button" class="user-menu-trigger" id="userMenuTrigger" aria-haspopup="true" aria-expanded="false" aria-label="Abrir menu do usuário">
+            <span id="usuarioIniciais" class="user-avatar" aria-hidden="true"></span>
+          </button>
+          <div class="user-menu-panel" id="userMenuPanel" role="menu" hidden>
+            <div class="user-menu-profile">
+              <span id="usuarioIniciaisMenu" class="user-avatar user-avatar-large" aria-hidden="true"></span>
+              <div>
+                <strong id="usuarioLogado" class="logged-user"></strong>
+                <small id="usuarioPerfil"></small>
+              </div>
+            </div>
+            <a href="/admin/" class="user-menu-item" id="adminLink" role="menuitem" hidden>
+              <i class="fa-solid fa-user-shield" aria-hidden="true"></i>
+              Administração
+            </a>
+            <button type="button" class="user-menu-item" id="btnPerfil" role="menuitem">
+              <i class="fa-solid fa-user-pen" aria-hidden="true"></i>
+              Perfil
+            </button>
+            <button type="button" class="user-menu-item" id="btnLogout" role="menuitem">
+              <i class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></i>
+              Sair
+            </button>
+          </div>
+        </div>
+        <label class="theme-switch">
+          <input type="checkbox" id="theme-toggle">
+          <span class="theme-slider">
+            <span class="theme-icon sun">☀️</span>
+            <span class="theme-icon moon">🌙</span>
+          </span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <main class="container admin-container">
+    <header class="header admin-hero">
+      <div class="logo">
+        <i class="fas fa-user-shield"></i>
+        <div>
+          <h1>Administração do site</h1>
+          <p class="subtitle">Usuários, obras e parâmetros de gestão do sistema.</p>
+        </div>
+      </div>
+    </header>
+
+    <section class="panel admin-shell" id="adminPanel" hidden>
+      <nav class="admin-tabs" aria-label="Áreas administrativas">
+        <button type="button" class="admin-tab active" data-admin-tab="usuarios" role="tab" aria-selected="true"><i class="fa-solid fa-users"></i> Usuários <span id="usuariosTabCount" class="admin-tab-count">0</span></button>
+        <button type="button" class="admin-tab" data-admin-tab="obras" role="tab" aria-selected="false"><i class="fa-solid fa-building"></i> Obras <span id="obrasTabCount" class="admin-tab-count">0</span></button>
+        <button type="button" class="admin-tab" data-admin-tab="gestao" role="tab" aria-selected="false"><i class="fa-solid fa-gauge-high"></i> Gestão</button>
+      </nav>
+      <div id="adminUsuarios" class="admin-tab-content">
+        <div class="admin-section-header"><div><span class="admin-eyebrow">Acessos</span><h2>Usuários</h2><p>Gerencie as pessoas que possuem acesso ao sistema.</p></div><button type="button" id="novoUsuario" class="primary"><i class="fa-solid fa-plus"></i> Novo usuário</button></div>
+        <div id="usuariosMetricas" class="admin-metrics admin-user-metrics"></div>
+        <div class="admin-users-toolbar"><label class="admin-search"><i class="fa-solid fa-magnifying-glass"></i><span class="sr-only">Buscar usuário</span><input id="usuariosBusca" type="search" placeholder="Buscar por nome ou usuário..."></label><label><span class="sr-only">Filtrar perfil</span><select id="usuariosPerfil"><option value="">Todos os perfis</option><option value="admin">Administrador</option><option value="colaborador">Colaborador</option><option value="cliente">Cliente</option></select></label></div>
+        <div id="usuariosLista" class="admin-users-table"></div>
+      </div>
+      <div id="adminObras" class="admin-tab-content" hidden>
+        <div id="adminObrasLista">
+          <div class="admin-section-header"><div><span class="admin-eyebrow">Base histórica</span><h2>Obras</h2><p>Cadastros e fichas técnicas utilizadas para análises históricas.</p></div><button type="button" id="novaObra" class="primary"><i class="fa-solid fa-plus"></i> Nova obra</button></div>
+          <div id="obrasIndicadores" class="admin-metrics admin-obras-indicadores"></div>
+          <div class="admin-obras-filtros">␊
+            <label class="admin-search"><i class="fa-solid fa-magnifying-glass"></i><span class="sr-only">Buscar obra</span><input id="obrasBusca" type="search" placeholder="Buscar por nome ou código..."></label>
+            <label>Situação<select id="obrasFiltroFicha"><option value="">Todas</option><option value="cadastro_minimo">Cadastro mínimo</option><option value="parcial">Parcial</option><option value="caracterizada">Caracterizada</option><option value="nao_aplicavel">Não aplicável</option></select></label>
+            <label>Categoria<select id="obrasFiltroCategoria"><option value="">Todas</option><option value="empreendimento">Empreendimento físico</option><option value="interno">Atividade interna</option><option value="estudo">Estudo / oportunidade</option><option value="outro">Outro</option></select></label>
+            <label>Natureza<select id="obrasFiltroNatureza"><option value="">Todas</option><option value="publico">Público</option><option value="privado">Privado</option><option value="misto">Misto</option></select></label>
+            <label>Benchmark<select id="obrasFiltroBenchmark"><option value="">Todos</option><option value="nao_avaliado">Não avaliado</option><option value="incluir">Incluir</option><option value="excluir">Excluir</option></select></label>
+            <label>Status<select id="obrasFiltroAtivo"><option value="true">Ativas</option><option value="false">Inativas</option><option value="">Todas</option></select></label>
+            <button type="button" id="limparFiltros" class="admin-link-button"><i class="fa-solid fa-filter-circle-xmark"></i> Limpar</button>
+            <label>Ordenar por<select id="obrasOrdenacao"><option value="nome">Nome</option><option value="codigo">Código</option><option value="ultima">Última movimentação</option><option value="completude-asc">Menor completude</option><option value="completude-desc">Maior completude</option><option value="benchmark">Benchmark pendente</option><option value="projetos">Maior quantidade de Projetos</option></select></label>
+          </div>
+          <div id="obrasVisoesRapidas" class="admin-quick-filters" aria-label="Visões rápidas"><button class="active" data-visao="todas">Todas</button><button data-visao="atencao">Requer atenção</button><button data-visao="sem-movimentacao">Sem movimentação</button><button data-visao="ficha">Ficha pendente</button><button data-visao="benchmark">Benchmark pendente</button><button data-visao="projetos">Projetos não sincronizados</button></div>
+          <div id="obrasTabela" class="admin-obras-tabela"><p>Carregando obras...</p></div>
+        </div>
+        <div id="adminObraFicha" hidden></div>
+      </div>
+      <div id="adminGestao" class="admin-tab-content admin-gestao" hidden>
+        <div class="admin-section-header"><div><span class="admin-eyebrow">Central do coordenador</span><h2>Gestão</h2><p>Visão administrativa das Obras, Projetos e qualidade dos dados.</p></div></div>
+        <div class="admin-gestao-filters"><label>Período<select id="gestaoPeriodo"><option value="semana-atual">Semana atual</option><option value="hoje">Hoje</option><option value="semana-anterior">Semana anterior</option><option value="mes-atual">Mês atual</option><option value="mes-anterior">Mês anterior</option><option value="personalizado">Personalizado</option></select></label><label>Obra<select id="gestaoObra"><option value="">Todas</option></select></label><label class="gestao-personalizado" hidden>Início<input type="date" id="gestaoInicio"></label><label class="gestao-personalizado" hidden>Fim<input type="date" id="gestaoFim"></label></div>
+        <div id="gestaoConteudo"><p class="admin-empty">Carregando indicadores...</p></div>
+      </div>
+    </section>
+    <div id="cadastroModal" class="admin-modal" hidden><div class="admin-modal-card" role="dialog" aria-modal="true" aria-labelledby="cadastroModalTitle"><button type="button" class="admin-modal-close" data-close-modal="cadastroModal" aria-label="Fechar">×</button><h2 id="cadastroModalTitle">Cadastrar usuário</h2><p>Crie um novo acesso e defina o perfil inicial.</p><form id="cadastroForm" class="admin-modal-form"><label for="cadastroNome">Nome</label><input type="text" id="cadastroNome" required><label for="cadastroUsuario">Usuário</label><input type="text" id="cadastroUsuario" autocomplete="username" required><label for="cadastroSenha">Senha</label><input type="password" id="cadastroSenha" autocomplete="new-password" minlength="6" required><label for="cadastroPerfil">Perfil</label><select id="cadastroPerfil"><option value="colaborador">Colaborador</option><option value="cliente">Cliente</option><option value="admin">Administrador</option></select><div class="admin-modal-actions"><button type="button" data-close-modal="cadastroModal">Cancelar</button><button type="submit" class="primary">Cadastrar usuário</button></div></form></div></div>
+    <div id="obraModal" class="admin-modal" hidden><div class="admin-modal-card" role="dialog" aria-modal="true" aria-labelledby="obraModalTitle"><button type="button" class="admin-modal-close" data-close-modal="obraModal" aria-label="Fechar">×</button><h2 id="obraModalTitle">Nova obra</h2><p>O código OBR será gerado automaticamente.</p><form id="obraForm" class="admin-modal-form"><label for="novaObraNome">Nome da obra</label><input type="text" id="novaObraNome" required><div class="admin-modal-actions"><button type="button" data-close-modal="obraModal">Cancelar</button><button type="submit" class="primary">Criar obra</button></div></form></div></div>
+    <div id="confirmarObraModal" class="admin-modal" hidden><div class="admin-modal-card" role="dialog" aria-modal="true" aria-labelledby="confirmarObraTitle"><button type="button" class="admin-modal-close" data-close-modal="confirmarObraModal" aria-label="Fechar">×</button><h2 id="confirmarObraTitle">Desativar obra?</h2><p id="confirmarObraTexto"></p><div class="admin-modal-actions"><button type="button" data-close-modal="confirmarObraModal">Cancelar</button><button type="button" id="confirmarAlternarObra" class="admin-danger-solid">Desativar obra</button></div></div></div>
+    <div id="adminToasts" class="admin-toasts" aria-live="polite" aria-atomic="true"></div>
+    <div id="passwordModal" class="profile-modal" hidden>
+      <div class="profile-modal-card" role="dialog" aria-modal="true" aria-labelledby="passwordModalTitle">
+        <button type="button" class="profile-modal-close" id="passwordModalClose" aria-label="Fechar alteração de senha">×</button>
+        <h2 id="passwordModalTitle">Alterar senha</h2>
+        <p class="profile-modal-help">Defina uma nova senha para <strong id="passwordUserName"></strong>.</p>
+        <form id="passwordForm" class="profile-form">
+          <input type="hidden" id="passwordUserId" />
+          <label>
+            Nova senha
+            <input type="password" id="passwordNew" autocomplete="new-password" minlength="6" required />
+          </label>
+          <label>
+            Confirmar nova senha
+            <input type="password" id="passwordConfirm" autocomplete="new-password" minlength="6" required />
+          </label>
+          <div class="profile-modal-actions">
+            <button type="button" id="passwordCancel">Cancelar</button>
+            <button type="submit">Salvar nova senha</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <section class="panel" id="accessDeniedPanel" hidden>
+      <div class="panel-header">
+        <div>
+          <h2>Acesso restrito</h2>
+          <p>Faça login como administrador para acessar esta página.</p>
+        </div>
+        <a href="/atividades/" class="primary nav-button">Ir para login</a>
+      </div>
+    </section>
+  </main>
+
+  <script src="/atividades/fase-item.js"></script>
+  <script src="/atividades/planner-modelos.js"></script>
+  <script src="/atividades/planner-gantt.js"></script>
+  <script src="/admin/gestao.js"></script>
+  <script src="/admin/script.js"></script>
+</body>
+</html>

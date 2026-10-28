@@ -1,0 +1,238 @@
+@import url('./styles.css');
+
+/* Ajustes específicos para a versão mobile */
+body[data-mode="mobile"] {
+    overflow: hidden;
+}
+
+body[data-mode="mobile"] .model-selection-card {
+    padding: 24px 20px;
+}
+
+body[data-mode="mobile"] .model-selection-actions {
+    flex-direction: column;
+}
+
+body[data-mode="mobile"] .model-selection-actions button {
+    width: 100%;
+}
+
+body[data-mode="mobile"] #toolbar {
+    top: 20px;
+    right: 20px;
+    left: auto;
+    bottom: auto;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    width: auto;
+    max-width: calc(100% - 40px);
+    background-color: rgba(33, 33, 33, 0.9);
+    border-radius: 8px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+    cursor: pointer;
+    transform: none;
+}
+
+body[data-mode="mobile"] #toolbar .tool-button {
+    min-width: unset;
+    width: 44px;
+    height: 44px;
+    padding: 6px;
+    font-size: 0;
+}
+
+body[data-mode="mobile"] #toolbar .tool-button span:first-child {
+    font-size: 18px !important;
+    margin-bottom: 0;
+}
+
+body[data-mode="mobile"] #myNavCubeCanvas {
+    bottom: 50px;
+    right: 20px;
+}
+
+body[data-mode="mobile"] #searchBar {
+    left: 20px;
+    right: 20px;
+    top: auto;
+    bottom: 20px;
+    max-width: none;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+}
+
+body[data-mode="mobile"]#searchBar input,
+body[data-mode="mobile"] #searchBar button {
+    width: 100%;
+}
+
+body[data-mode="mobile"] #searchBar .search-feedback {
+    text-align: left;
+}
+
+body[data-mode="mobile"] #treeViewContainer {
+    top: 20px;
+    left: 20px;
+    right: auto;
+    width: 320px;
+    max-width: 40vw;
+    height: calc(100% - 60px);
+}
+
+body[data-mode="mobile"] #modeSwitcher {
+    bottom: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: calc(100% - 40px);
+}
+
+body[data-mode="mobile"] .mode-button {
+    flex: 1 1 180px;
+    text-align: center;
+}
+
+body[data-mode="mobile"] #toolbar.open {
+    cursor: auto;
+    top: 72px;
+    max-height: 120px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(20, 20, 20, 0.9) rgba(0, 0, 0, 0.35);
+}
+
+body[data-mode="mobile"] #toolbar.open::-webkit-scrollbar {
+    width: 10px;
+}
+
+body[data-mode="mobile"] #toolbar.open::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.35);
+    border-radius: 999px;
+}
+
+body[data-mode="mobile"] #toolbar.open::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #111, #2a2a2a);
+    border-radius: 999px;
+    border: 2px solid rgba(0, 0, 0, 0.35);
+}
+
+body[data-mode="mobile"] #toolbar.open::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #0b0b0b, #1f1f1f);
+}
+
+body[data-mode="mobile"] #toolbar {
+    display: flex;
+}
+
+body[data-mode="mobile"] #toolbar:not(.open) {
+    padding: 0;
+    width: auto;
+    background: transparent;
+    box-shadow: none;
+}
+
+body[data-mode="mobile"] #toolbar:not(.open) .tool-button {
+    display: none;
+}
+
+body[data-mode="mobile"] #toolbar:not(.open) .tool-button.active {
+    display: flex;
+}
+
+
+body[data-mode="mobile"] #mobileToolbarToggle {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 100002;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: none;
+    border-radius: 5px;
+    background-color: rgba(20, 20, 20, 0.85);
+    color: #fff;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.3);
+}
+
+body[data-mode="mobile"] #mobileToolbarToggle .tool-toggle-icon {
+    display: block;
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+}
+
+body[data-mode="mobile"] #mobileToolbarToggle .tool-toggle-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+body[data-mode="mobile"] #mobileToolbarToggle:hover,
+body[data-mode="mobile"] #mobileToolbarToggle[aria-pressed="true"] {
+    background-color: rgba(20, 20, 20, 0.95);
+}
+
+body[data-mode="mobile"] #helpPanel {
+    top: 20px;
+    right: 20px;
+    left: 20px;
+    width: auto;
+    max-width: none;
+}
+
+body[data-mode="mobile"] #shareUploadPanel {
+    top: 20px;
+    right: 20px;
+    left: 20px;
+    width: auto;
+    max-width: none;
+}
+
+body[data-mode="mobile"] #transformPanel {
+    top: auto;
+    bottom: 20px;
+    right: 20px;
+    left: 20px;
+    width: auto;
+    max-width: none;
+}
+
+body[data-mode="mobile"] #creditNote {
+    display: none;
+}
+
+.ifc-upload-panel {
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    padding: 10px 12px;
+}
+
+.ifc-upload-panel p {
+    font-size: 0.8rem;
+}
+
+body[data-mode="mobile"] #budgetPanel {
+    top: 20px;
+    right: 20px;
+    left: 20px;
+    width: auto;
+    max-width: none;
+    height: calc(100% - 40px);
+}

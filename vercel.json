@@ -1,0 +1,42 @@
+{
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400"
+        }
+      ]
+    }
+  ],
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "redirects": [
+    {
+      "source": "/3D/:slug(TCE|tce|iper|lacen|policlinica|farmacia|fecomercio|esc_canaa|esc_modelo|sebrae-rr|sesc_centro_ecologico|psb).html",
+      "destination": "/3D/:slug",
+      "permanent": true
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/3D/:slug(TCE|tce|iper|lacen|policlinica|farmacia|fecomercio|esc_canaa|esc_modelo|sebrae-rr|sesc_centro_ecologico|psb)",
+      "destination": "/api/viewer-page?p=:slug"
+    }
+  ],
+  "functions": {
+    "api/ifc-to-xkt.js": {
+      "maxDuration": 300
+    },
+    "api/ifc-storage-upload-url.js": {
+      "maxDuration": 60
+    },
+    "api/clash.js": {
+      "maxDuration": 300
+    },
+    "api/viewer-page.js": {
+      "includeFiles": "3D/viewer.html"
+    }
+  }
+}

@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizador BIM - XKT/IFC/GLB Upload</title>
+    <link rel="icon" href="/images/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" href="/images/favicon-32x32.png" sizes="32x32">
+    <link rel="icon" type="image/png" href="/images/favicon-16x16.png" sizes="16x16">
+    <link id="modeStylesheet" rel="stylesheet" href="/3D/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+    <link rel="stylesheet" href="/3D/viewer/layout-v2.css">
+</head>
+<body data-project="ifc_upload">
+    <div id="modelSelection" class="model-selection" role="dialog" aria-modal="true" aria-labelledby="modelSelectionTitle" hidden>
+        <div class="model-selection-card">
+            <h1 id="modelSelectionTitle">Selecione o Projeto</h1>
+            <p>Escolha qual projeto deseja carregar.</p>
+            <div class="model-selection-actions">
+                <div class="model-selection-group">
+                    <span class="model-selection-group-title">Público</span>
+                    <div class="model-selection-buttons">
+                        <button id="selectIperModels" type="button">IPER</button>
+                        <button id="selectLacenModels" type="button">LACEN</button>
+                        <button id="selectPoliclinicaModels" type="button">Policlínica</button>
+                        <button id="selectCanaaModels" type="button">Escola Canaã</button>
+                    </div>
+                </div>
+                <div class="model-selection-group">
+                    <span class="model-selection-group-title">Privado</span>
+                    <div class="model-selection-buttons">
+                        <button id="selectFarmaciaModels" type="button">Farmácia do Jânio</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <canvas id="meuCanvas"></canvas>
+
+    <canvas id="myNavCubeCanvas"></canvas>
+
+    <div id="toolbar" aria-expanded="false">
+        <button
+            id="btnAngle"
+            class="tool-button"
+            onclick="setMeasurementMode('angle', this)"
+            title="Medir Ângulo (Transferidor)"
+    >
+            <span style="font-size: 1.2em;">📐</span>
+            Ângulo
+        </button>
+
+        <button 
+            id="btnDistance" 
+            class="tool-button" 
+            onclick="setMeasurementMode('distance', this)" 
+            title="Medir Distância (Régua)"
+        >
+            <span style="font-size: 1.2em;">📏</span>
+            Distância
+        </button>
+     
+        <button 
+            id="btnToggleTree"
+            class="tool-button"
+            onclick="toggleTreeView(this)"
+            title="Mostrar/Esconder Pavimentos"
+        >
+            <span style="font-size: 1.2em;">🏢</span>
+            Pavimentos
+        </button>
+
+        <button
+            id="btnSectionPlane"
+            class="tool-button"
+            onclick="toggleSectionPlane(this)"
+            title="Plano de Corte (Horizontal)"
+        >
+            <span style="font-size: 1.2em;">🔪</span>
+            Corte
+        </button>
+        <button
+            id="btnTransformPanel"
+            class="tool-button"
+            title="Ajustar origem e rotação do modelo"
+        >
+            <span style="font-size: 1.2em;">🧭</span>
+            Origem/Rotação
+        </button>
+        <button
+            id="btnCollisionPanel"
+            class="tool-button"
+            title="Detectar colisões entre modelos"
+            hidden
+            aria-hidden="true"
+            tabindex="-1"
+        >
+            <span style="font-size: 1.2em;">🧊</span>
+            Colisões
+        </button>
+        <button
+            id="btnSearchToggle"
+            class="tool-button"
+            title="Mostrar/Esconder busca por ID"
+            aria-pressed="false"
+        >
+            <span style="font-size: 1.2em;">🔍</span>
+            Buscar
+        </button>
+        <button
+            id="btnMaterialsPanel"
+            class="tool-button"
+            title="Gerar lista geral de materiais"
+            hidden
+            aria-hidden="true"
+            tabindex="-1"
+        >
+            <span style="font-size: 1.2em;">📋</span>
+            Materiais
+        </button>
+        <button
+            id="btnPerformanceMode"
+            class="tool-button"
+            title="Ativar modo leve para reduzir a renderização 3D"
+            aria-pressed="false"
+        >
+            <span style="font-size: 1.2em;">🪶</span>
+            Modo leve
+        </button>
+        <button
+            id="btnHelp"
+            class="tool-button"
+            title="Ajuda e atalhos de teclado"
+        >
+            <span style="font-size: 1.2em;">❔</span>
+            Ajuda
+        </button>
+        <button
+            id="btnShareUploadLink"
+            class="tool-button"
+            title="Gerar link temporário para compartilhar"
+            aria-haspopup="dialog"
+            aria-expanded="false"
+        >
+            <span style="font-size: 1.2em;">🔗</span>
+            Compartilhar
+        </button>
+    </div>
+    <div id="searchBar" class="search-bar" aria-label="Buscar peça por ID ou nome" hidden>
+        <div class="search-panel-header">
+            <div>
+                <div class="search-panel-title">Buscar peça</div>
+                <div class="search-panel-subtitle">Encontre elementos pelo ID ou nome</div>
+            </div>
+            <button id="closeSearchBar" type="button" class="search-close-button" aria-label="Fechar busca">✕</button>
+        </div>
+        <div class="search-panel-controls">
+            <label class="sr-only" for="searchIdInput">ID da peça ou nome</label>
+            <input id="searchIdInput" type="text" placeholder="Buscar peça pelo ID ou nome" aria-label="ID da peça ou nome" />
+            <button id="btnSearchId" type="button" class="search-action">Buscar</button>
+        </div>
+        <span id="searchFeedback" class="search-feedback" aria-live="polite"></span>
+    </div>
+    <div id="ifcUploadPanel" class="ifc-upload-panel" aria-label="Carregar arquivo XKT, IFC ou GLB">
+        <div id="ifcUploadIntro">
+            <h1>Bem-vindo ao Visualizador BIM</h1>
+            <p class="ifc-upload-panel-subtitle">Carregue seu modelo IFC/XKT/GLB para iniciar a análise 3D.</p>
+        </div>
+        <label class="ifc-upload-dropzone" for="ifcUploadInput">
+            <span class="ifc-upload-dropzone-icon" aria-hidden="true">📦</span>
+            <span class="ifc-upload-dropzone-title">Selecionar arquivo</span>
+            <span class="ifc-upload-dropzone-helper">ou arraste e solte aqui</span>
+            <span class="ifc-upload-dropzone-formats">.ifc, .xkt, .glb</span>
+            <input id="ifcUploadInput" type="file" accept=".xkt,.ifc,.glb" multiple />
+        </label>
+        <div id="ifcUploadProgressPanel" class="ifc-upload-progress-panel" hidden>
+            <div class="ifc-upload-progress-header">
+                <div class="ifc-upload-progress-file-wrap">
+                    <span id="ifcUploadProgressFile" class="ifc-upload-progress-file">Preparando upload...</span>
+                    <span id="ifcUploadProgressSize" class="ifc-upload-progress-size">(0 B)</span>
+                </div>
+                <div class="ifc-upload-progress-stats">
+                    <span id="ifcUploadProgressStatus" class="ifc-upload-progress-status">Uploading</span>
+                    <span id="ifcUploadProgressPercent" class="ifc-upload-progress-percent">0%</span>
+                    <span id="ifcUploadProgressSpeed" class="ifc-upload-progress-speed">0 KB/s</span>
+                    <span id="ifcUploadProgressEta" class="ifc-upload-progress-eta">--</span>
+                </div>
+            </div>
+            <div class="ifc-upload-progress-track" role="progressbar" aria-label="Progresso do upload" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                <div id="ifcUploadProgressFill" class="ifc-upload-progress-fill"></div>
+            </div>
+            <div id="ifcUploadProgressMeta" class="ifc-upload-progress-meta">Aguardando arquivo...</div>
+        </div>
+        <div id="ifcUploadQueue" class="ifc-upload-queue" hidden></div>
+        <p id="ifcUploadStatus">Selecione um arquivo .xkt, .ifc ou .glb para visualizar.</p>
+    </div>
+    <button id="mobileToolbarToggle" type="button" aria-label="Mostrar todas as ferramentas" title="Mostrar todas as ferramentas" hidden>
+        <img class="tool-toggle-icon" src="/3D/img/ferramentas-fechada.png" alt="" aria-hidden="true" />
+        <span class="tool-toggle-text">Mais ferramentas</span>
+    </button>
+    <div id="treeViewContainer">
+        <div class="tree-view-header">
+            <div>
+                <div class="tree-view-title">Pavimentos</div>
+                <div class="tree-view-subtitle">Selecione o pavimento para isolar</div>
+            </div>
+            <div class="tree-view-actions">
+                <button id="toggleTreeViewSelection" type="button">Selecionar todos</button>
+                <button id="closeTreeView" type="button" aria-label="Fechar painel">✕</button>
+            </div>
+        </div>
+        <div id="treeViewContent" class="tree-view-content"></div>
+    </div>
+    <div id="helpPanel" hidden>
+        <div class="help-panel-header">
+            <div>
+                <div class="help-panel-title">Ajuda</div>
+                <div class="help-panel-subtitle">Atalhos de teclado e dicas rápidas</div>
+            </div>
+            <button id="closeHelpPanel" type="button" aria-label="Fechar painel de ajuda">✕</button>
+        </div>
+
+        <div class="help-section">
+            <h4>Atalhos gerais</h4>
+            <ol class="help-list">
+                <li><kbd>1</kbd> — Vista da direita</li>
+                <li><kbd>2</kbd> — Vista da frente</li>
+                <li><kbd>3</kbd> — Vista da esquerda</li>
+                <li><kbd>4</kbd> — Vista de trás</li>
+                <li><kbd>5</kbd> — Vista do topo</li>
+                <li><kbd>6</kbd> — Vista de baixo</li>
+                <li><kbd>Q</kbd> — Girar para a esquerda</li>
+                <li><kbd>E</kbd> — Girar para a direita</li>
+                <li><kbd>W</kbd> — Aumentar zoom</li>
+                <li><kbd>S</kbd> — Diminuir zoom</li>
+                <li><kbd>Z</kbd> — Descer</li>
+                <li><kbd>X</kbd> — Subir</li>
+                <li><kbd>M</kbd> — Mostrar todos</li>
+                <li><kbd>H</kbd> — Voltar à vista inicial</li>
+                <li><kbd>G</kbd> — Alternar modo leve (reduz a renderização 3D)</li>
+                <li><kbd>R</kbd> — Redefinir modo raio X</li>
+                <li><kbd>Esc</kbd> — Sair</li>
+            </ol>
+        </div>
+
+        <div class="help-section">
+            <h4>Para objetos selecionados</h4>
+            <ul class="help-list">
+                <li><kbd>P</kbd> — Propriedades do material</li>
+                <li><kbd>L</kbd> — Lista geral de materiais</li>
+                <li><kbd>T</kbd> — IDs do material selecionado</li>
+                <li><kbd>K</kbd> — Isolar material selecionado na lista</li>
+                <li><kbd>7</kbd> — Isolar seleção do orçamento web por modelo XKT</li>
+                <li><kbd>I</kbd> — Isolar</li>
+                <li><kbd>O</kbd> — Ocultar</li>
+                <li><kbd>J</kbd> — Rotacionar a peça selecionada em 90°</li>
+            </ul>
+            <p class="help-note">Para selecionar um objeto, clique duas vezes.</p>
+        </div>
+    </div>
+    <div id="shareUploadPanel" class="share-upload-panel" role="dialog" aria-modal="true" aria-labelledby="shareUploadTitle" hidden>
+        <div class="share-upload-panel-header">
+            <div>
+                <div id="shareUploadTitle" class="share-upload-panel-title">Compartilhar modelos</div>
+                <div class="share-upload-panel-subtitle">Link temporário válido por 1 hora</div>
+            </div>
+            <button id="closeShareUploadPanel" type="button" aria-label="Fechar painel">✕</button>
+        </div>
+        <div class="share-upload-link-row">
+            <input id="shareUploadLinkInput" type="text" readonly aria-label="Link temporário de compartilhamento" />
+            <button id="copyShareUploadLink" type="button">Copiar</button>
+        </div>
+        <p id="shareUploadCode" class="share-upload-code"></p>
+        <div class="share-upload-actions">
+            <button id="generateShareUploadLink" type="button">Gerar link</button>
+            <button id="addMoreIfcFiles" type="button">Adicionar modelos</button>
+        </div>
+        <div id="shareUploadFilesList" class="share-upload-files-list" aria-live="polite"></div>
+    </div>
+    <div id="collisionPanel" hidden>
+        <div class="collision-panel-header">
+            <div>
+                <div class="collision-panel-title">Verificar colisões</div>
+                <div class="collision-panel-subtitle">Encontre objetos em conflito dentro de um único modelo XKT</div>
+            </div>
+            <button id="closeCollisionPanel" type="button" aria-label="Fechar painel">✕</button>
+        </div>
+
+        <label class="collision-label" for="collisionModelA">Modelo</label>
+        <select id="collisionModelA" aria-label="Modelo para analisar"></select>
+
+        <label class="collision-label" for="collisionRadius">Raio de colisão (mm)</label>
+        <input
+            id="collisionRadius"
+            type="number"
+            min="0"
+            step="1"
+            value="0"
+            placeholder="Ex: 5"
+            aria-label="Raio de colisão em milímetros"
+        />
+
+        <div class="collision-actions">
+            <button type="button" id="runCollisionCheck">Procurar colisões</button>
+            <button type="button" id="downloadCollisionPdf" disabled>Baixar PDF das colisões</button>
+        </div>
+
+        <p id="collisionSummary" class="collision-summary">Carregue um modelo para iniciar a análise.</p>
+        <ul id="collisionResults" class="collision-results" aria-live="polite"></ul>
+    </div>
+    <div id="materialsPanel" hidden>
+        <div class="materials-panel-header">
+            <div>
+                <div class="materials-panel-title">Lista geral de materiais</div>
+                <div class="materials-panel-subtitle">Consolidação automática das propriedades quantitativas IFC</div>
+            </div>
+            <button id="closeMaterialsPanel" type="button" aria-label="Fechar painel">✕</button>
+        </div>
+
+        <div class="materials-actions">
+            <button type="button" id="generateMaterialsList">Gerar lista</button>
+            <button type="button" id="downloadMaterialsExcel" disabled>Baixar Excel</button>
+        </div>
+
+        <div class="materials-search">
+            <label class="sr-only" for="materialsSearchInput">Buscar material</label>
+            <input id="materialsSearchInput" type="text" placeholder="Buscar material (ex: acessório)" aria-label="Buscar material" />
+            <button id="materialsSearchButton" type="button" class="materials-search-button">Buscar</button>
+        </div>
+
+        <p id="materialsSummary" class="materials-summary">Clique em "Gerar lista" para consolidar os materiais dos modelos carregados.</p>
+        <ul id="materialsResults" class="materials-results" aria-live="polite"></ul>
+        <div id="materialsIdsPanel" class="materials-ids-panel" hidden>
+            <p id="materialsIdsSummary" class="materials-ids-summary"></p>
+            <ul id="materialsIdsList" class="materials-ids-list" aria-live="polite"></ul>
+        </div>
+    </div>
+    <div id="transformPanel" hidden>
+        <div class="transform-panel-header">
+            <div>
+                <div class="transform-panel-title">Origem & Rotação</div>
+                <div class="transform-panel-subtitle">Reposicione um modelo XKT fora da origem</div>
+            </div>
+            <button id="closeTransformPanel" type="button" aria-label="Fechar painel">✕</button>
+        </div>
+
+        <label class="transform-label" for="transformModelSelect">Modelo</label>
+        <select id="transformModelSelect" aria-label="Escolha o modelo para ajustar"></select>
+
+        <div class="transform-grid">
+            <label class="transform-field">
+                Deslocamento X (m)
+                <input type="number" id="offsetX" step="0.1" value="0" />
+            </label>
+            <label class="transform-field">
+                Deslocamento Y (m)
+                <input type="number" id="offsetY" step="0.1" value="0" />
+            </label>
+            <label class="transform-field">
+                Deslocamento Z (m)
+                <input type="number" id="offsetZ" step="0.1" value="0" />
+            </label>
+        </div>
+
+        <div class="transform-grid">
+            <label class="transform-field">
+                Rotação Y (°)
+                <input type="number" id="rotationY" step="1" value="0" />
+            </label>
+        </div>
+
+        <div class="transform-actions">
+            <button type="button" id="applyTransformButton">Aplicar</button>
+            <button type="button" id="resetTransformButton">Restaurar origem</button>
+        </div>
+
+        <p class="transform-hint">A translação muda a origem do modelo; a rotação é aplicada em torno dessa origem.</p>
+    </div>
+    <div id="modeSwitcher" aria-label="Alternar modo de visualização">
+        <button type="button" class="mode-button active" data-mode="desktop">Versão Computador</button>
+        <button type="button" class="mode-button" data-mode="mobile">Versão Celular</button>
+    </div>
+    <div id="creditNote" role="note" aria-label="Responsável pelo programa">
+        Responsável: Eng. Msc. Rodrigo Damasceno Nascimento
+    </div>
+    <script type="module" src="/3D/app.js"></script>
+    <script>
+        const modeStylesheet = document.getElementById('modeStylesheet');
+        const modeButtons = document.querySelectorAll('#modeSwitcher [data-mode]');
+        const toolbar = document.getElementById('toolbar');
+        const mobileToolbarToggle = document.getElementById('mobileToolbarToggle');
+        const mobileToolbarToggleText = mobileToolbarToggle.querySelector('.tool-toggle-text');
+        const mobileToolbarToggleIcon = mobileToolbarToggle.querySelector('.tool-toggle-icon');
+
+        const MOBILE_LABELS = {
+            open: 'Minimizar ferramentas',
+            closed: 'Mais ferramentas'
+        };
+
+        const MOBILE_ICONS = {
+            open: '/3D/img/ferramentas-aberta.png',
+            closed: '/3D/img/ferramentas-fechada.png'
+        };
+
+        function updateMobileLabels(isOpen) {
+            const label = isOpen ? MOBILE_LABELS.open : MOBILE_LABELS.closed;
+            const icon = isOpen ? MOBILE_ICONS.open : MOBILE_ICONS.closed;
+            toolbar.dataset.label = label;
+            if (mobileToolbarToggleText) {
+                mobileToolbarToggleText.textContent = label;
+            }
+            if (mobileToolbarToggleIcon) {
+                mobileToolbarToggleIcon.src = icon;
+            }
+            mobileToolbarToggle.setAttribute('aria-label', label);
+            mobileToolbarToggle.setAttribute('title', label);
+        }
+
+        function toggleMobileToolbar(forceOpen) {
+            const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : !toolbar.classList.contains('open');
+            toolbar.classList.toggle('open', shouldOpen);
+            toolbar.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+            mobileToolbarToggle.setAttribute('aria-pressed', shouldOpen ? 'true' : 'false');
+            updateMobileLabels(shouldOpen);
+        }
+
+        function applyMode(mode) {
+            if (mode !== 'mobile' && mode !== 'desktop') {
+                mode = 'desktop';
+            }
+            let stylesheet = '/3D/styles.css';
+
+            if (mode === 'mobile') {
+                stylesheet = '/3D/styles-mobile.css';
+            }
+            if (modeStylesheet.getAttribute('href') !== stylesheet) {
+                modeStylesheet.setAttribute('href', stylesheet);
+            }
+            modeButtons.forEach((button) => {
+                button.classList.toggle('active', button.dataset.mode === mode);
+            });
+
+            document.body.dataset.mode = mode;
+
+            const isMobileMode = mode === 'mobile';
+            mobileToolbarToggle.hidden = !isMobileMode;
+            toggleMobileToolbar(false);
+
+            localStorage.setItem('preferredMode', mode);
+        }
+
+        modeButtons.forEach((button) => {
+            button.addEventListener('click', () => applyMode(button.dataset.mode));
+        });
+
+        mobileToolbarToggle.addEventListener('click', () => toggleMobileToolbar());
+
+        toolbar.addEventListener('click', (event) => {
+            if (document.body.dataset.mode !== 'mobile') {
+                return;
+            }
+
+            const button = event.target.closest('.tool-button');
+            if (!button) {
+                return;
+            }
+
+            toggleMobileToolbar(false);
+        });
+
+        const storedMode = localStorage.getItem('preferredMode');
+        applyMode(storedMode || 'desktop');
+    </script>
+    <script src="/3D/viewer/layout-v2.js"></script>
+</body>
+
+</html>

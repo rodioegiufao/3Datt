@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>EngRodrigo Family Studio</title>
+    <link rel="icon" href="/images/favicon.ico" sizes="any" />
+    <link rel="stylesheet" href="/3D/criacao/css/style.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="quickbar">
+          <div class="brand">
+            <strong>EngRodrigo Family Studio</strong
+            ><span>Editor de famílias BIM paramétricas</span>
+          </div>
+          <nav class="actions compact">
+            <button id="newProject">Nova família</button
+            ><button id="saveProject">Salvar</button>
+            <label class="button file"
+              >Importar JSON<input
+                id="importJson"
+                type="file"
+                accept="application/json,.json"
+            /></label>
+            <label class="button file"
+              >Importar IFC<input
+                id="importIfc"
+                type="file"
+                accept=".ifc"
+            /></label>
+            <button id="clearIfcReference" class="hidden">Remover referência IFC</button
+            ><button id="exportJson">Exportar JSON</button
+            ><button id="exportIfc2x3">Exportar IFC2x3</button
+            ><button id="exportIfc4">Exportar IFC4</button
+            ><button id="exportGltf">Exportar glTF</button
+            ><button id="exportObj">Exportar OBJ</button>
+            <button id="undo">↶ Desfazer</button
+            ><button id="redo">↷ Refazer</button>
+          </nav>
+          <nav class="view-tabs">
+            <button data-view="plan">Vista 2D</button
+            ><button data-view="three">Vista 3D</button
+            ><button data-view="split" class="active">Dividida</button>
+          </nav>
+        </div>
+        <div class="ribbon-tabs" aria-label="Ferramentas principais">
+          <button class="ribbon-tab active" type="button" data-ribbon-tab="create">Criar</button>
+          <button class="ribbon-tab" type="button" data-ribbon-tab="family">Família</button>
+        </div>
+        <div class="ribbon" id="createRibbon" data-ribbon-panel="create">
+          <section class="forms-section">
+            <div class="section-heading">
+              <h3>Formas</h3>
+              <label class="operation-choice" for="formOperation">
+                Tipo
+                <select
+                  id="formOperation"
+                  aria-label="Escolher entre formas sólidas e vazias"
+                >
+                  <option value="solid" selected>Formas sólidas</option>
+                  <option value="void">Formas vazias</option>
+                </select>
+              </label>
+            </div>
+            <div>
+              <button class="tool solid" data-create-form="extrusion">
+                ▰ Extrusão</button
+              ><button class="tool solid" data-create-form="blend">
+                ▱ Mesclar</button
+              ><button class="tool solid" data-create-form="revolve">
+                ◔ Revolver</button
+              ><button class="tool solid" data-create-form="sweep">
+                ⌁ Varredura</button
+              ><button class="tool solid" data-create-form="sweptBlend">
+                ⟿ Mesclar com varredura
+              </button>
+            </div>
+          </section>
+          <section>
+            <h3>Ajuda</h3>
+            <div>
+              <button id="howToDraw">Como desenhar</button
+              ><button id="revolveHelp">Ajuda: Revolver</button>
+            </div>
+          </section>
+        </div>
+        <div class="ribbon family-ribbon hidden" id="familyRibbon" data-ribbon-panel="family">
+          <section class="family-section">
+            <h2>Família</h2>
+            <div class="family-grid">
+              <label>Nome<input id="projectName" type="text" /></label
+              ><label>Categoria<select id="category"></select></label
+              ><label>Vista de trabalho<select id="workView"></select></label
+              ><label
+                >Ferramenta ativa<input id="activeToolLabel" readonly
+              /></label>
+              <label
+                >Profundidade da nova extrusão (mm ou parâmetro)<input
+                  id="defaultDepth"
+                  value="Profundidade" /></label
+              ><label
+                >Passo do snap (mm)<input
+                  id="snapStep"
+                  type="number"
+                  min="1"
+                  step="1" /></label
+              ><label
+                >Grade principal (mm)<input
+                  id="majorGrid"
+                  type="number"
+                  min="10"
+                  step="10" /></label>
+              <div class="family-checks">
+                <label class="check"
+                  ><input id="showGrid" type="checkbox" /> Mostrar grade</label
+                ><label class="check"
+                  ><input id="snapEnabled" type="checkbox" /> Ativar snap</label
+                >
+              </div>
+              <button id="deleteSelectedSide">Excluir selecionado</button>
+            </div>
+          </section>
+        </div>
+        <div class="ribbon contextual hidden" id="creationRibbon">
+          <div class="context-title" id="creationTitle">
+            Modificar | Criar extrusão
+          </div>
+          <section>
+            <h3>Modo</h3>
+            <div>
+              <button class="finish" id="finishEdit">✓ Finalizar</button
+              ><button class="cancel" id="cancelEdit">✕ Cancelar</button
+              ><button id="deleteProfileLine" title="Selecione uma linha com a ferramenta Selecionar linhas">⌫ Excluir linha</button>
+            </div>
+          </section>
+          <section>
+            <h3>Desenhar</h3>
+            <div>
+              <button class="tool draw-tool" data-draw-tool="line" title="Linha" aria-label="Linha">
+                <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 27 27 5"/><rect x="3" y="25" width="4" height="4"/><rect x="25" y="3" width="4" height="4"/></svg><span>Linha</span></button
+              ><button class="tool draw-tool" data-draw-tool="rectangle" title="Retângulo" aria-label="Retângulo">
+                <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="6" y="8" width="20" height="15"/><rect x="4" y="6" width="4" height="4"/><rect x="24" y="6" width="4" height="4"/><rect x="4" y="21" width="4" height="4"/><rect x="24" y="21" width="4" height="4"/></svg><span>Retângulo</span></button
+              ><button class="tool draw-tool" data-draw-tool="polygon-inscribed" title="Polígono inscrito" aria-label="Polígono inscrito">
+                <svg viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,4 27,12 23,26 9,26 5,12"/><circle cx="16" cy="16" r="12" class="muted-stroke"/></svg><span>Polígono inscrito</span></button
+              ><button class="tool draw-tool" data-draw-tool="polygon-circumscribed" title="Polígono circunscrito" aria-label="Polígono circunscrito">
+                <svg viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,5 27,13 23,27 9,27 5,13"/><circle cx="16" cy="17" r="8" class="muted-stroke"/></svg><span>Polígono circunscrito</span></button
+              ><button class="tool draw-tool" data-draw-tool="circle" title="Círculo" aria-label="Círculo">
+                <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="10"/><line x1="16" y1="16" x2="24" y2="10" class="muted-stroke"/><circle cx="16" cy="16" r="2"/></svg><span>Círculo</span></button
+              ><button class="tool draw-tool" data-draw-tool="ellipse" title="Elipse" aria-label="Elipse">
+                <svg viewBox="0 0 32 32" aria-hidden="true"><ellipse cx="16" cy="16" rx="12" ry="7"/><circle cx="16" cy="16" r="2"/></svg><span>Elipse</span></button
+              ><button class="tool draw-tool" data-draw-tool="arc3" title="Arco (3 pontos)" aria-label="Arco (3 pontos)">
+                <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M6 25A20 20 0 0 1 26 8"/><rect x="4" y="23" width="4" height="4"/><rect x="24" y="6" width="4" height="4"/></svg><span>Arco (3 pontos)</span></button
+              ><button class="tool draw-tool" data-draw-tool="spline" title="Spline" aria-label="Spline">
+                <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M5 24C10 7 14 28 19 12S26 12 27 6"/><circle cx="5" cy="24" r="2"/><circle cx="19" cy="12" r="2"/><circle cx="27" cy="6" r="2"/></svg><span>Spline</span></button
+              ><button class="tool draw-tool" data-draw-tool="pick-lines" title="Selecionar linhas" aria-label="Selecionar linhas">
+                <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M7 25 25 7"/><path d="M18 23 25 23 25 16"/><path d="M18 23 28 13" class="muted-stroke"/></svg><span>Selecionar linhas</span></button>
+            </div>
+          </section>
+          <section>
+            <h3>Plano de trabalho</h3>
+            <div>
+              <button id="setPlane">Definir plano</button
+              ><button id="showPlane">Exibir plano</button
+              ><select id="workViewRibbon"></select>
+            </div>
+          </section>
+        </div>
+        <div class="optionsbar hidden" id="optionsBar">
+          Linear |
+          <label
+            ><input id="chainToggle" type="checkbox" checked /> Cadeia</label
+          >
+          | Deslocamento: <input id="offsetOption" type="number" value="0" /> mm
+          | Raio: <input id="radiusOption" type="number" value="100" /> mm |
+          Lados: <input id="polygonSides" type="number" min="3" value="6" /> |
+          <label><input id="orthoOption" type="checkbox" /> Orto</label>
+        </div>
+      </header>
+      <main class="workspace">
+        <aside class="panel properties-panel">
+          <button class="collapse" data-target="left">☰</button>
+          <h2 class="panel-title">Propriedades</h2>
+          <section id="selectedPanel" class="selected-section">
+            <p class="muted">Selecione uma forma para editar suas propriedades.</p>
+          </section>
+          <details class="family-properties">
+            <summary>Parâmetros da família</summary>
+            <div id="parameterList"></div>
+            <div class="inline parameter-add">
+              <input id="newParamName" aria-label="Nome do parâmetro" placeholder="Nome" /><input
+                id="newParamValue"
+                aria-label="Valor do parâmetro"
+                type="number"
+                placeholder="mm"
+              /><button id="addParam" aria-label="Adicionar parâmetro">+</button>
+            </div>
+          </details>
+        </aside>
+        <aside class="panel right navigator-panel">
+          <button class="collapse" data-target="right">☰</button>
+          <h2>Navegador</h2>
+          <ul class="tree">
+            <li>
+              ▾ <span id="treeProjectName">Família</span>
+              <ul>
+                <li>Categoria: <span id="treeCategory"></span></li>
+                <li>
+                  ▾ Tipos <button id="addType">+</button>
+                  <ul id="typeTree"></ul>
+                </li>
+                <li>
+                  ▾ Perfis <span id="profileCount">0</span>
+                  <ul id="profileTree"></ul>
+                </li>
+                <li>
+                  ▾ Formas <span id="extrusionCount">0</span>
+                  <ul id="extrusionTree"></ul>
+                </li>
+              </ul>
+            </li>
+          </ul>
+        </aside>
+        <section class="canvas-area split">
+          <div id="planView" class="view">
+            <canvas id="planCanvas"></canvas>
+          </div>
+          <div id="threeView" class="view">
+            <canvas id="threeCanvas"></canvas>
+            <div id="viewCube" class="view-cube" aria-label="Cubo de navegação 3D"></div>
+          </div>
+          <div id="toast"></div>
+          <div id="drawHelp" class="modal hidden">
+            <div class="modal-card">
+              <button id="closeHelp" class="modal-close">×</button>
+              <h2>Como desenhar</h2>
+              <div class="demo-grid">
+                <span class="demo-cursor"></span
+                ><svg viewBox="0 0 240 140">
+                  <polyline points="45,95 105,45 180,92 45,95" />
+                </svg>
+              </div>
+              <ol>
+                <li>Escolha a forma e uma ferramenta de desenho.</li>
+                <li>Clique nos pontos do perfil em magenta.</li>
+                <li>Feche o contorno clicando no primeiro ponto.</li>
+                <li>Você pode desenhar outros contornos internos antes de clicar em Finalizar.</li>
+              </ol>
+            </div>
+          </div>
+          <div id="revolveHelpModal" class="modal hidden">
+            <div class="modal-card help-card">
+              <button id="closeRevolveHelp" class="modal-close">×</button>
+              <h2>Revolver como no Revit</h2>
+              <p>
+                Use esta forma para girar um perfil 2D ao redor de um eixo e
+                criar geometrias cilíndricas, torneadas ou de revolução.
+              </p>
+              <ol>
+                <li>
+                  Clique em <strong>Revolver</strong> ou
+                  <strong>Revolução vazia</strong>.
+                </li>
+                <li>
+                  Desenhe um <strong>perfil fechado</strong> na vista 2D e
+                  clique em <strong>Finalizar</strong>.
+                </li>
+                <li>
+                  Desenhe a <strong>linha do eixo de revolução</strong>,
+                  equivalente ao eixo do Revit, e finalize novamente.
+                </li>
+                <li>
+                  Selecione a forma criada para ajustar ângulo inicial, ângulo
+                  final e quantidade de segmentos.
+                </li>
+              </ol>
+              <p class="muted">
+                Referência: fluxo da Autodesk para criar uma revolução no Revit
+                LT: definir o contorno 2D, definir o eixo, concluir e depois
+                modificar a forma.
+              </p>
+              <a
+                href="https://help.autodesk.com/view/RVTLT/2027/PTB/?guid=GUID-791BBD4C-ABFA-40D7-9B4F-8C39F50164CE"
+                target="_blank"
+                rel="noopener"
+                >Abrir ajuda oficial da Autodesk</a
+              >
+            </div>
+          </div>
+        </section>
+      </main>
+      <footer class="statusbar">
+        <span id="coordX">X: 0 mm</span><span id="coordY">Y: 0 mm</span
+        ><span id="tempLength">Segmento: —</span
+        ><span id="snapStatus">Snap: ligado</span><span>Unidade: mm</span
+        ><span id="toolStatus">Ferramenta: Perfil</span>
+      </footer>
+    </div>
+    <script type="module" src="/3D/criacao/js/app.js"></script>
+  </body>
+</html>

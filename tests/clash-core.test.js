@@ -1,0 +1,33 @@
+import assert from "node:assert/strict";
+import { adjacentClashIndex, filterClashResults, normalizeIfcClashResults, resolveIfcGuidToSceneObjectId, serializeClashViewpoint, transformClashPointToViewerCoordinates } from "../3D/viewer/features/clash/clash-core.js";
+import { analyzeXktObjects, broadPhase, trianglesIntersect } from "../3D/viewer/features/clash/xkt-clash-core.js";
+import { alignGeometryToEntityAABB, validateGeometryCoordinateSpace } from "../3D/viewer/features/clash/xkt-geometry.js";
+
+const [clash] = normalizeIfcClashResults({ clashes: [{ id: "c1", a: { model_id: "EST", GlobalId: "3ABC", ifc_class: "IfcBeam", Name: "Viga V35" }, b: { modelId: "HID", guid: "2XYZ", type: "IfcPipeSegment", name: "PVC 75" }, point: [1, 2, 3], penetration: 0.032 }] }, { setA: "Estrutura", setB: "Hidráulica" });
+assert.equal(clash.source, "ifcclash");
+assert.equal(clash.objectA.guid, "3ABC");
+assert.equal(clash.distance, 0.032);
+assert.equal(clash.status, "new");
+
+assert.equal(resolveIfcGuidToSceneObjectId("3ABC", "EST", { objects: { "EST#3ABC": {} } }), "EST#3ABC");
+assert.equal(resolveIfcGuidToSceneObjectId("3ABC", "EST", { objects: { "other.3abc": {} } }), "other.3abc");
+assert.deepEqual(transformClashPointToViewerCoordinates([1, 0, 0], { rotation: [0, 90, 0], position: [10, 2, 3] }).map((n) => Math.round(n)), [10, 2, 2]);
+assert.equal(adjacentClashIndex(0, 3, -1), 2);
+assert.equal(adjacentClashIndex(2, 3, 1), 0);
+assert.equal(filterClashResults([clash], { query: "viga", statuses: ["new"] }).length, 1);
+clash.status = "resolved";
+assert.equal(filterClashResults([clash], { statuses: ["new"] }).length, 0);
+assert.deepEqual(serializeClashViewpoint(clash, { perspective_camera: {} }).guids, ["3ABC", "2XYZ"]);
+const geometry=(id,positions,indices=[0,1,2])=>({id,objectId:id,modelId:"M",aabb:[Math.min(...positions.filter((_,i)=>i%3===0)),Math.min(...positions.filter((_,i)=>i%3===1)),Math.min(...positions.filter((_,i)=>i%3===2)),Math.max(...positions.filter((_,i)=>i%3===0)),Math.max(...positions.filter((_,i)=>i%3===1)),Math.max(...positions.filter((_,i)=>i%3===2))],positions:new Float32Array(positions),indices:new Uint32Array(indices)});
+const triangleA=geometry("A",[0,0,0,2,0,0,0,2,0]);
+const triangleFalsePositive=geometry("B",[2,2,0,1.5,2,0,2,1.5,0]);
+assert.equal(broadPhase([triangleA],[triangleFalsePositive]).length,1,"fixture precisa passar no AABB");
+assert.equal(analyzeXktObjects([triangleA],[triangleFalsePositive]).clashes.length,0,"AABB não confirma clash");
+assert.ok(trianglesIntersect([[0,0,0],[2,0,0],[0,2,0]],[[.5,-1,-1],[.5,1,1],[.5,1,-1]]));
+const crossing=geometry("C",[.5,-1,-1,.5,1,1,.5,1,-1]);
+assert.equal(analyzeXktObjects([triangleA],[crossing]).clashes.length,1);
+const transformed=alignGeometryToEntityAABB({positions:new Float32Array([0,0,0,1,0,0,0,1,0]),indices:new Uint32Array([0,1,2])},[10,0,4,10,1,5],{rotation:[0,90,0],position:[10,0,5]});
+assert.equal(transformed.coordinateSpace,"model-local+transform");
+assert.equal(validateGeometryCoordinateSpace({aabb:[10,0,4,10,1,5]},transformed).valid,true);
+assert.equal(analyzeXktObjects([triangleA],[{id:"empty",aabb:[0,0,0,1,1,1]}]).clashes.length,0);
+console.log("Clash core: 17 assertions passed");
