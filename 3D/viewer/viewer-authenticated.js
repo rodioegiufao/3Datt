@@ -175,7 +175,7 @@ highlightMaterial.color = [0, 0, 0];
 highlightMaterial.edgeColor = [0, 0, 0];
 
 // Fundo, chão com grade, sombra de contato, SAO e arestas (app/scene-style.js)
-setupSceneStyle({ viewer, requestRenderFrame, enableSAO: !viewerCompatibility.disableSAO, lowPower: viewerCompatibility.useCompatibilityMode });
+setupSceneStyle({ viewer, requestRenderFrame, enableSAO: !viewerCompatibility.disableSAO });
 // Excel é carregado somente quando uma ferramenta de materiais/orçamento o solicita.
 setupEletrodutoAssociationExportShortcut({ viewer, setSearchStatus, requestRenderFrame, focusObjectById });
 

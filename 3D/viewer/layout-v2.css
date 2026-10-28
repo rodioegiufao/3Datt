@@ -1539,3 +1539,9 @@ body[data-mode="mobile"] #viewerModelLoadProgress {
     top: 12px;
     left: 12px;
 }
+
+/* No computador o cubo de navegação já tem a vista inicial (e a tecla H):
+   o botão da casinha fica só no celular, onde o cubo não aparece */
+body:not([data-mode="mobile"]) .home-view-button {
+    display: none;
+}
