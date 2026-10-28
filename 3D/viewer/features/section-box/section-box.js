@@ -8,7 +8,8 @@ import {
 
 const MIN_SIZE = 0.2;          // m: a caixa nunca fica menor que isto em cada direção
 const FIT_MARGIN = 0.15;       // m de folga ao ajustar a caixa a objetos
-const EDGE_COLOR = [0.2, 0.55, 1];
+const EDGE_COLOR = [0.17, 0.19, 0.23];   // grafite da interface
+const EDGE_OPACITY = 0.55;
 
 // Faces: eixo (0=x, 1=y, 2=z) e lado (0 = mínimo, 1 = máximo).
 // O xeokit esconde o lado oposto à direção do plano → a direção aponta para dentro da caixa.
@@ -23,12 +24,15 @@ const FACES = [
 
 const STYLE = `
 .section-box-handles{position:fixed;inset:0;pointer-events:none;z-index:100005}
-.section-box-handle{position:absolute;width:22px;height:22px;margin:-11px 0 0 -11px;padding:0;border:2px solid #fff;border-radius:50%;background:#3389ff;box-shadow:0 2px 8px rgba(10,20,40,.35);cursor:grab;pointer-events:auto;touch-action:none;transition:transform .12s ease}
-.section-box-handle::after{content:"";position:absolute;inset:5px;border-radius:50%;background:rgba(255,255,255,.85)}
-.section-box-handle:hover{transform:scale(1.18)}
-.section-box-handle.is-dragging{cursor:grabbing;transform:scale(1.25);background:#1f6fe0}
+.section-box-handle{position:absolute;display:grid;place-items:center;width:20px;height:20px;margin:-10px 0 0 -10px;padding:0;border:1.5px solid rgba(255,255,255,.92);border-radius:50%;background:rgba(26,28,32,.86);color:#eceef1;box-shadow:0 1px 5px rgba(10,12,16,.32);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);cursor:grab;pointer-events:auto;touch-action:none;opacity:.9;transition:transform .12s ease,background-color .12s ease,color .12s ease,opacity .12s ease}
+.section-box-handle svg{width:9px;height:9px;overflow:visible;transform:rotate(var(--angle,0deg));transform-origin:50% 50%;fill:currentColor;pointer-events:none}
+.section-box-handle:hover{opacity:1;transform:scale(1.15);background:#17191c}
+.section-box-handle.is-dragging{opacity:1;cursor:grabbing;transform:scale(1.2);background:#eceef1;color:#17191c;border-color:#17191c}
+.section-box-handle:focus-visible{outline:2px solid #8fc1ff;outline-offset:2px}
 .section-box-handle[hidden]{display:none}
 body[data-mode="mobile"] .section-box-handle{width:30px;height:30px;margin:-15px 0 0 -15px}
+body[data-mode="mobile"] .section-box-handle svg{width:12px;height:12px}
+@media (prefers-reduced-motion: reduce){.section-box-handle{transition:none}}
 `;
 
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -92,7 +96,7 @@ export function createSectionBox({ viewer, requestRenderFrame = () => {}, onChan
             positions.push(...p[a], ...p[b]);
             indices.push(i, i + 1);
         });
-        edges = new LineSet(scene, { positions, indices, color: EDGE_COLOR, opacity: 0.85, clippable: false, collidable: false });
+        edges = new LineSet(scene, { positions, indices, color: EDGE_COLOR, opacity: EDGE_OPACITY, clippable: false, collidable: false });
         if (edges._sceneModel && "collidable" in edges._sceneModel) edges._sceneModel.collidable = false;
     }
 
@@ -117,6 +121,14 @@ export function createSectionBox({ viewer, requestRenderFrame = () => {}, onChan
             handle.hidden = false;
             handle.style.left = `${rect.left + screen[0]}px`;
             handle.style.top = `${rect.top + screen[1]}px`;
+            // Direção da seta: para fora da face, como aparece na tela
+            const outward = faceNormalInward(face).map((n) => -n);
+            const reach = Math.max(0.5, (box[face.axis + 3] - box[face.axis]) * 0.2);
+            const tip = camera.projectWorldPos([center[0] + outward[0] * reach, center[1] + outward[1] * reach, center[2] + outward[2] * reach]);
+            if (tip && Number.isFinite(tip[0])) {
+                const angle = Math.atan2(tip[1] - screen[1], tip[0] - screen[0]) * 180 / Math.PI;
+                handle.style.setProperty("--angle", `${angle.toFixed(1)}deg`);
+            }
         });
     }
 
@@ -186,6 +198,8 @@ export function createSectionBox({ viewer, requestRenderFrame = () => {}, onChan
             handle.className = "section-box-handle";
             handle.setAttribute("aria-label", `Ajustar face ${face.label} da caixa de corte`);
             handle.dataset.tip = `Arraste para ajustar (${face.label})`;
+            // Seta que aponta para fora da caixa (girada conforme a câmera)
+            handle.innerHTML = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3.5 1.8 10 6l-6.5 4.2c-.5.3-1-.1-1-.6V2.4c0-.5.5-.9 1-.6Z"/></svg>';
             handle.addEventListener("pointerdown", (event) => startDrag(event, i));
             handlesLayer.appendChild(handle);
             return handle;
