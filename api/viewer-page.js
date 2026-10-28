@@ -43,9 +43,8 @@ function renderViewerPage(project, { origin }) {
 
     const help = (project.help || []).map((item) => `                <li>${item}</li>`).join("\n");
     const body = project.budget ? BUDGET_PANEL(escapeHtml(project.name)) : "";
-    const scripts = project.groundGrid === "fit"
-        ? `<script type="module" src="/3D/viewer/features/ground-grid-fit.js"></script>`
-        : "";
+    // O chão ajustado ao prédio agora vale para todos os projetos (3D/viewer/app/scene-style.js)
+    const scripts = "";
 
     return readTemplate()
         .replace("{{title}}", escapeHtml(title))

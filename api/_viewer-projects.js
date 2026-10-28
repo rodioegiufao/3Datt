@@ -44,10 +44,9 @@ const ROTATE_HELP = "<kbd>J</kbd> — Rotacionar a peça selecionada em 90°";
  * image       imagem da prévia (1200×630), caminho a partir da raiz do site (opcional)
  * help        atalhos extras na Ajuda (opcional)
  * budget      true = inclui o painel de orçamento do projeto (opcional)
- * groundGrid  "fit" = grade do piso do tamanho do prédio (opcional)
  */
 const VIEWER_PROJECTS = [
-    { slug: "TCE", project: "tce", name: "TCE", description: "Modelo BIM 3D do TCE com todas as disciplinas de projeto.", image: "/3D/img/og-tce.jpg", groundGrid: "fit" },
+    { slug: "TCE", project: "tce", name: "TCE", description: "Modelo BIM 3D do TCE com todas as disciplinas de projeto.", image: "/3D/img/og-tce.jpg" },
     { slug: "iper", project: "iper", name: "IPER" },
     { slug: "lacen", project: "lacen", name: "LACEN" },
     { slug: "policlinica", project: "policlinica", name: "Policlínica" },
