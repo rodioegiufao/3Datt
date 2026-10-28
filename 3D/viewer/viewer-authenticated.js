@@ -18,6 +18,7 @@ import { getProjectConfig, hasProjectConfig } from "./project-config.js";
 import { getViewerPermissions, RESTRICTED_EXPLORER_TABS } from "./core/viewer-permissions.js";
 // Módulos do visualizador (funções separadas por área em ./app/)
 import { NAV_CUBE_STYLE, setupSceneStyle } from "./app/scene-style.js";
+import { setupSectionTools } from "./app/section-tools.js";
 import { materialsFeatureAllowed, setupClashLinkFromUrl, setupCollisionPanelControls, setupRestrictedViewerFeaturesAccessGate, transformFeatureAllowed } from "./app/access.js";
 import { annotationClickModeEnabled, ensureAnnotationsFeature } from "./app/annotations.js";
 import { closePropertyPanel } from "./app/electrical-schedules.js";
@@ -310,6 +311,7 @@ performanceModeToggleButton?.addEventListener("click", () => togglePerformanceMo
 }
 setupTouchNavigation();
 setupHomeViewButton();
+setupSectionTools();
 
 export function setExplorerTabsAccess(tabIds) {
     const knownTabIds = new Set(EXPLORER_TAB_DEFINITIONS.map(({ id }) => id));
