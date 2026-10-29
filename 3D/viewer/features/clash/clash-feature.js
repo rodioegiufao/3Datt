@@ -3,6 +3,7 @@ import { buildClashReport } from "./clash-report.js";
 import { buildClashLink, defaultClashCamera } from "./clash-link.js";
 import { paintViewerBackground } from "../../app/scene-style.js";
 import { createBcfImport } from "./bcf-import.js";
+import { buildClashBcfZip } from "./bcf-export.js";
 import { adjacentClashIndex, filterClashResults, groupClashResults, serializeClashViewpoint } from "./clash-core.js";
 import { runXktClashAnalysis } from "./clash-api.js";
 import { extractEntityGeometry, clearClashGeometryCache, positionsAABB } from "./xkt-geometry.js";
@@ -40,7 +41,7 @@ export function createClashFeature({viewer,panel,models,transforms,getAllObjectI
  <div class="clash-type-filters"><details class="clash-type-filter" id="clashTypesA"></details><details class="clash-type-filter" id="clashTypesB"></details></div>
  <label class="collision-label">Tipo<select id="clashMode"><option value="intersection">Interferência física</option><option value="clearance">Proximidade / Folga</option></select></label><label id="clashDistanceLabel" class="collision-label">Precisão geométrica (m)<input id="collisionRadius" type="number" min="0.000001" max="1" step="0.001" value="0.001"></label>
  <div class="collision-actions"><button id="runCollisionCheck">Executar análise</button><button id="cancelCollisionCheck" hidden>Cancelar</button></div><p id="collisionSummary" class="collision-summary" role="status">Selecione dois modelos XKT.</p>
- <div class="clash-filters"><input id="clashSearch" type="search" placeholder="Buscar nome, ID, classe ou modelo"><select id="clashStatus"><option value="pending">Pendentes</option><option value="all">Todos os status</option><option value="resolved">Resolvidos</option></select></div><div id="clashNavigation" class="clash-navigation" hidden><button data-nav="-1">←</button><strong id="clashCounter">0 / 0</strong><button data-nav="1">→</button></div><div id="collisionResults" class="collision-results"></div><div class="collision-actions"><button id="copyClashLink" type="button" disabled title="Copia um link que abre esta interferência isolada no visualizador">Copiar link</button><button id="downloadCollisionPdf" disabled>Baixar PDF</button><button id="exportAllBcf" disabled>Exportar viewpoints</button></div>`;
+ <div class="clash-filters"><input id="clashSearch" type="search" placeholder="Buscar nome, ID, classe ou modelo"><select id="clashStatus"><option value="pending">Pendentes</option><option value="all">Todos os status</option><option value="resolved">Resolvidos</option></select></div><div id="clashNavigation" class="clash-navigation" hidden><button data-nav="-1">←</button><strong id="clashCounter">0 / 0</strong><button data-nav="1">→</button></div><div id="collisionResults" class="collision-results"></div><div class="collision-actions"><button id="copyClashLink" type="button" disabled title="Copia um link que abre esta interferência isolada no visualizador">Copiar link</button><button id="downloadCollisionPdf" disabled>Baixar PDF</button><button id="exportAllBcf" disabled title="Todas as interferências da lista num único arquivo .bcfzip (Revit, Navisworks, BIMcollab, Collab…)">Exportar BCF</button></div>`;
  // O painel pode ser arrastado (viewer-authenticated.js), e o arraste bloqueia cliques em <summary>/<label>.
  // Nestas áreas o clique precisa funcionar normalmente, então o pointerdown não chega ao arraste.
  panel.querySelectorAll(".clash-type-filters,#collisionResults,.clash-filters,#clashNavigation").forEach(area=>area.addEventListener("pointerdown",event=>event.stopPropagation()));
@@ -117,7 +118,7 @@ export function createClashFeature({viewer,panel,models,transforms,getAllObjectI
          if(x>0&&y>0&&x<W&&y<H){ctx.beginPath();ctx.arc(x,y,24,0,Math.PI*2);ctx.fillStyle="#e53935";ctx.fill();ctx.lineWidth=4;ctx.strokeStyle="#ffffff";ctx.stroke();ctx.fillStyle="#ffffff";ctx.font="bold 24px Arial, sans-serif";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(String(index+1),x,y+1);}
      }}catch(_error){}
      const url=buildClashLink(clash,{index,total:visibleResults.length,camera:camera||currentCamera()});
-     return {image:out.toDataURL("image/jpeg",0.88),url};
+     return {image:out.toDataURL("image/jpeg",0.88),url,camera:{...(camera||currentCamera()),fov:viewer.camera.perspective?.fov||60}};
  }
  // Distância da câmera conforme o tamanho da menor peça (tubo fino → mais perto; pilar → mais longe)
  function clashCameraDistance(ids){
@@ -133,6 +134,34 @@ export function createClashFeature({viewer,panel,models,transforms,getAllObjectI
      try{await navigator.clipboard.writeText(url);button.textContent="Link copiado";}
      catch(_error){window.prompt("Copie o link da interferência:",url);}
      setTimeout(()=>{button.textContent=label;},1800);
+ }
+ // ---- Exportar todas as interferências da lista num único .bcfzip
+ function reportMeta(){
+     const first=visibleResults[0]||results[0],mode=lastAnalysis?.mode||first?.mode;
+     return {
+         project:(document.title||"Projeto").replace(/^Visualizador BIM\s*-\s*/i,"").trim()||"Projeto",
+         groupA:lastAnalysis?.groupA||first?.setA||first?.objectA?.modelLabel||first?.objectA?.modelId||"Grupo A",
+         groupB:lastAnalysis?.groupB||first?.setB||first?.objectB?.modelLabel||first?.objectB?.modelId||"Grupo B",
+         mode,modeLabel:mode==="clearance"?"Proximidade / Folga":"Interferência física",
+         author:window.__VIEWER_AUTH_USER__?.nome||window.__VIEWER_AUTH_USER__?.usuario||"Visualizador BIM"
+     };
+ }
+ async function downloadBcf(){
+     if(reportRunning||!visibleResults.length)return;
+     reportRunning=true;const button=$("#exportAllBcf"),label=button.textContent,previousSummary=summary.textContent;
+     const previousIndex=activeIndex,previousMode=currentMode,clashes=visibleResults.slice();
+     button.disabled=true;
+     try{
+         const meta=reportMeta();
+         const blob=await buildClashBcfZip({clashes,meta,statusLabelOf:(s)=>STATUS_LABELS[s]||s,capture:(c,i)=>captureClashImage(c,i),onProgress:(n,total)=>{button.textContent=`BCF ${n}/${total}...`;summary.textContent=`Gerando BCF: interferência ${n} de ${total}...`;}});
+         const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`compatibilizacao-${slug(meta.groupA)}-x-${slug(meta.groupB)}.bcfzip`;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},2000);
+         summary.textContent=`Arquivo BCF gerado com ${clashes.length} interferência(s).`;
+     }catch(error){console.error("[BCF]",error);summary.textContent=`Não foi possível gerar o BCF: ${error.message}`;}
+     finally{
+         reportRunning=false;button.textContent=label;button.disabled=!results.length;
+         if(previousIndex>=0&&visibleResults.length)await showClash(previousIndex,previousMode);else restore();
+         if(summary.textContent.startsWith("Gerando"))summary.textContent=previousSummary;
+     }
  }
  async function downloadReport(){
      if(reportRunning||!visibleResults.length)return;
@@ -236,5 +265,5 @@ export function createClashFeature({viewer,panel,models,transforms,getAllObjectI
  new MutationObserver(()=>{if(!panel.hidden)refreshModelOptions();}).observe(panel,{attributes:true,attributeFilter:["hidden"]});
  refreshModelOptions();
  setA.addEventListener("change",()=>renderTypeFilter($("#clashTypesA"),setA.value));setB.addEventListener("change",()=>renderTypeFilter($("#clashTypesB"),setB.value));
- renderTypeFilter($("#clashTypesA"),setA.value);renderTypeFilter($("#clashTypesB"),setB.value);$("#clashSearch").oninput=$("#clashStatus").onchange=applyFilters;panel.querySelectorAll("[data-nav]").forEach(b=>b.onclick=()=>showClash(adjacentClashIndex(activeIndex,visibleResults.length,Number(b.dataset.nav))));$("#downloadCollisionPdf").onclick=()=>downloadReport();$("#copyClashLink").onclick=()=>copyClashLink();$("#exportAllBcf").onclick=async()=>{for(const c of results)await exportViewpoint(c);};const bcfImport=createBcfImport({viewer,panel,requestRenderFrame});$("#closeCollisionPanel").onclick=()=>{controller?.abort();panel.hidden=true;bcfImport.clear();restore({keepSnapshot:false});};render();return{destroy(){destroyed=true;controller?.abort();bcfImport.destroy();restore({keepSnapshot:false});resultsView.destroy();},getResults:()=>results,isIsolated:()=>isolated};
+ renderTypeFilter($("#clashTypesA"),setA.value);renderTypeFilter($("#clashTypesB"),setB.value);$("#clashSearch").oninput=$("#clashStatus").onchange=applyFilters;panel.querySelectorAll("[data-nav]").forEach(b=>b.onclick=()=>showClash(adjacentClashIndex(activeIndex,visibleResults.length,Number(b.dataset.nav))));$("#downloadCollisionPdf").onclick=()=>downloadReport();$("#copyClashLink").onclick=()=>copyClashLink();$("#exportAllBcf").onclick=()=>downloadBcf();const bcfImport=createBcfImport({viewer,panel,requestRenderFrame});$("#closeCollisionPanel").onclick=()=>{controller?.abort();panel.hidden=true;bcfImport.clear();restore({keepSnapshot:false});};render();return{destroy(){destroyed=true;controller?.abort();bcfImport.destroy();restore({keepSnapshot:false});resultsView.destroy();},getResults:()=>results,isIsolated:()=>isolated};
 }

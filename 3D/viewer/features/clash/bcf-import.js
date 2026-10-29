@@ -57,7 +57,7 @@ const formatDate = (iso) => {
 };
 
 let jszipPromise = null;
-function ensureJSZip() {
+export function ensureJSZip() {
     if (window.JSZip) return Promise.resolve(window.JSZip);
     jszipPromise ||= new Promise((resolve, reject) => {
         const script = document.createElement("script");
