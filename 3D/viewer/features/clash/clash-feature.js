@@ -2,6 +2,7 @@ import { createClashResultsView } from "./clash-results-view.js";
 import { buildClashReport } from "./clash-report.js";
 import { buildClashLink, defaultClashCamera } from "./clash-link.js";
 import { paintViewerBackground } from "../../app/scene-style.js";
+import { createBcfImport } from "./bcf-import.js";
 import { adjacentClashIndex, filterClashResults, groupClashResults, serializeClashViewpoint } from "./clash-core.js";
 import { runXktClashAnalysis } from "./clash-api.js";
 import { extractEntityGeometry, clearClashGeometryCache, positionsAABB } from "./xkt-geometry.js";
@@ -235,5 +236,5 @@ export function createClashFeature({viewer,panel,models,transforms,getAllObjectI
  new MutationObserver(()=>{if(!panel.hidden)refreshModelOptions();}).observe(panel,{attributes:true,attributeFilter:["hidden"]});
  refreshModelOptions();
  setA.addEventListener("change",()=>renderTypeFilter($("#clashTypesA"),setA.value));setB.addEventListener("change",()=>renderTypeFilter($("#clashTypesB"),setB.value));
- renderTypeFilter($("#clashTypesA"),setA.value);renderTypeFilter($("#clashTypesB"),setB.value);$("#clashSearch").oninput=$("#clashStatus").onchange=applyFilters;panel.querySelectorAll("[data-nav]").forEach(b=>b.onclick=()=>showClash(adjacentClashIndex(activeIndex,visibleResults.length,Number(b.dataset.nav))));$("#downloadCollisionPdf").onclick=()=>downloadReport();$("#copyClashLink").onclick=()=>copyClashLink();$("#exportAllBcf").onclick=async()=>{for(const c of results)await exportViewpoint(c);};$("#closeCollisionPanel").onclick=()=>{controller?.abort();panel.hidden=true;restore({keepSnapshot:false});};render();return{destroy(){destroyed=true;controller?.abort();restore({keepSnapshot:false});resultsView.destroy();},getResults:()=>results,isIsolated:()=>isolated};
+ renderTypeFilter($("#clashTypesA"),setA.value);renderTypeFilter($("#clashTypesB"),setB.value);$("#clashSearch").oninput=$("#clashStatus").onchange=applyFilters;panel.querySelectorAll("[data-nav]").forEach(b=>b.onclick=()=>showClash(adjacentClashIndex(activeIndex,visibleResults.length,Number(b.dataset.nav))));$("#downloadCollisionPdf").onclick=()=>downloadReport();$("#copyClashLink").onclick=()=>copyClashLink();$("#exportAllBcf").onclick=async()=>{for(const c of results)await exportViewpoint(c);};const bcfImport=createBcfImport({viewer,panel,requestRenderFrame});$("#closeCollisionPanel").onclick=()=>{controller?.abort();panel.hidden=true;bcfImport.clear();restore({keepSnapshot:false});};render();return{destroy(){destroyed=true;controller?.abort();bcfImport.destroy();restore({keepSnapshot:false});resultsView.destroy();},getResults:()=>results,isIsolated:()=>isolated};
 }
