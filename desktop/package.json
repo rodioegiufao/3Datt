@@ -1,0 +1,80 @@
+{
+  "name": "bim-viewer-desktop",
+  "productName": "BIM Viewer Desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Visualizador BIM desktop (Electron) com GPU dedicada, conversão IFC nativa e uso offline",
+  "author": "Eng. Rodrigo Damasceno",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/desktop.test.js",
+    "dist": "electron-builder --win nsis portable --x64",
+    "dist:installer": "electron-builder --win nsis --x64",
+    "dist:portable": "electron-builder --win portable --x64",
+    "dist:dir": "electron-builder --dir"
+  },
+  "dependencies": {
+    "@xeokit/xeokit-convert": "1.3.2",
+    "@xeokit/xeokit-sdk": "2.6.107",
+    "jspdf": "2.5.1",
+    "qrcode-generator": "1.4.4",
+    "three": "0.165.0",
+    "web-ifc": "0.0.70",
+    "xlsx": "0.18.5"
+  },
+  "devDependencies": {
+    "electron": "^44.10.0",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "br.com.engrodrigodamasceno.bimviewer",
+    "productName": "BIM Viewer Desktop",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/web-ifc/**"
+    ],
+    "files": [
+      "electron/**/*",
+      "renderer/**/*",
+      "package.json",
+      "!node_modules/@xeokit/xeokit-sdk/{src,types,examples,assets,docs}/**",
+      "!node_modules/three/{src,examples/fonts,examples/textures,examples/models,docs,editor,manual}/**",
+      "!node_modules/jspdf/{src,types,docs}/**",
+      "!node_modules/**/*.map",
+      "!node_modules/**/{README,CHANGELOG,readme,changelog}*"
+    ],
+    "extraResources": [
+      { "from": "../3D", "to": "site/3D", "filter": ["**/*", "!**/*.zip"] },
+      { "from": "../images", "to": "site/images" },
+      { "from": "../api/_viewer-projects.js", "to": "site/api/_viewer-projects.js" },
+      { "from": "../api/viewer-page.js", "to": "site/api/viewer-page.js" }
+    ],
+    "fileAssociations": [
+      { "ext": "ifc", "name": "Modelo IFC", "description": "Modelo BIM IFC", "role": "Viewer" },
+      { "ext": "xkt", "name": "Modelo XKT", "description": "Modelo BIM XKT (xeokit)", "role": "Viewer" }
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis", "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "include": "build/installer.nsh",
+      "artifactName": "${productName}-${version}-instalador.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portatil.${ext}"
+    }
+  }
+}
