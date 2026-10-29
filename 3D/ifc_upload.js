@@ -655,7 +655,7 @@ if (!bridge) {
             const removeButton = document.createElement("button");
             removeButton.type = "button";
             removeButton.className = "share-upload-file-remove";
-            removeButton.textContent = "🗑️";
+            removeButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/></svg>';
             removeButton.title = "Excluir";
             removeButton.setAttribute("aria-label", `Excluir ${file.name || "modelo.ifc"}`);
             removeButton.addEventListener("click", () => {
@@ -883,7 +883,7 @@ if (!bridge) {
             try {
                 const { shareCode, shareLink, expiresAt, warning } = await createShareSnapshot(shareableFiles);
                 shareLinkInput.value = shareLink;
-                shareCodeElement.textContent = `Código: ${shareCode} • expira em ${new Date(expiresAt).toLocaleString("pt-BR")}${warning ? " • armazenamento temporário" : ""}`;
+                shareCodeElement.textContent = `Código ${shareCode} | expira em ${new Date(expiresAt).toLocaleString("pt-BR")}${warning ? " | armazenamento temporário" : ""}`;
                 bridge.setUploadStatus(
                     warning
                         ? "Link temporário gerado, mas o armazenamento persistente falhou; use o link imediatamente."

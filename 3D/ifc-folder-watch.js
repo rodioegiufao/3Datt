@@ -12,38 +12,45 @@ const STORE = "handles";
 const LAST_KEY = "lastFolder";
 
 const STYLE = `
-.folder-watch-actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:10px 0 4px}
-.folder-watch-actions button{border:0;border-radius:8px;padding:9px 14px;background:#2563eb;color:#fff;font-weight:700;cursor:pointer}
-.folder-watch-actions button.secondary{background:#334155}
-.folder-watch-actions button:disabled{opacity:.5;cursor:default}
-.folder-watch-hint{font-size:12px;opacity:.8;text-align:center;margin:2px 0 8px}
-.folder-watch-chip{position:fixed;right:16px;bottom:16px;z-index:300020;display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;background:rgba(20,28,38,.92);color:#fff;font:12px/1.3 Arial,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.35)}
+.folder-watch-actions{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:8px;margin:2px 0 0}
+.folder-watch-actions button{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:38px;border:1px solid var(--ui-border,rgba(255,255,255,.08));border-radius:var(--ui-radius-sm,7px);padding:0 14px;background:var(--ui-raised,rgba(255,255,255,.06));color:var(--ui-text,#eceef1);font:600 13px var(--ui-font,system-ui,sans-serif);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.folder-watch-actions button:hover:not(:disabled){background:rgba(255,255,255,.12)}
+.folder-watch-actions button[hidden]{display:none}
+.folder-watch-actions button:disabled{opacity:.45;cursor:default}
+.folder-watch-actions svg,.folder-share-title svg{width:16px;height:16px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.folder-watch-hint{font-size:11.5px!important;color:var(--ui-text-muted,rgba(236,238,241,.58))!important;text-align:center;margin:0!important}
+.folder-watch-chip{position:fixed;right:16px;bottom:16px;z-index:300020;display:flex;align-items:center;gap:8px;padding:6px 6px 6px 12px;border:1px solid var(--ui-border,rgba(255,255,255,.08));border-radius:999px;background:var(--ui-surface,rgba(26,28,32,.92));color:var(--ui-text,#eceef1);font:500 12px/1.3 var(--ui-font,system-ui,sans-serif);box-shadow:var(--ui-shadow,0 10px 30px rgba(10,12,16,.28));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
 .folder-watch-chip[hidden]{display:none}
-.folder-watch-chip .dot{width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.25)}
-.folder-watch-chip.is-paused .dot{background:#f59e0b;box-shadow:0 0 0 3px rgba(245,158,11,.25)}
-.folder-watch-chip button{border:0;border-radius:6px;padding:4px 8px;background:#334155;color:#fff;cursor:pointer;font:inherit}
-.folder-watch-dialog{position:fixed;right:16px;bottom:64px;z-index:300021;width:min(380px,calc(100vw - 32px));padding:14px;border-radius:10px;background:#fff;color:#0f172a;font:13px/1.45 Arial,sans-serif;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.folder-watch-chip .dot{width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.22)}
+.folder-watch-chip.is-paused .dot{background:#f2b94b;box-shadow:0 0 0 3px rgba(242,185,75,.22)}
+.folder-watch-chip button{height:26px;border:none;border-radius:999px;padding:0 10px;background:var(--ui-raised,rgba(255,255,255,.08));color:var(--ui-text,#eceef1);cursor:pointer;font:600 11.5px var(--ui-font,system-ui,sans-serif)}
+.folder-watch-chip button:hover{background:rgba(255,255,255,.16)}
+.folder-watch-dialog{position:fixed;right:16px;bottom:64px;z-index:300021;width:min(380px,calc(100vw - 32px));box-sizing:border-box;padding:16px;border:1px solid var(--ui-border,rgba(255,255,255,.08));border-radius:var(--ui-radius-lg,14px);background:var(--ui-surface-solid,#1a1c20);color:var(--ui-text,#eceef1);font:400 13px/1.45 var(--ui-font,system-ui,sans-serif);box-shadow:var(--ui-shadow,0 10px 30px rgba(10,12,16,.28))}
 .folder-watch-dialog[hidden]{display:none}
-.folder-watch-dialog h3{margin:0 0 6px;font-size:15px}
+.folder-watch-dialog h3{margin:0 0 6px;font-size:15px;font-weight:600}
 .folder-watch-dialog ul{list-style:none;margin:8px 0;padding:0;max-height:220px;overflow:auto}
 .folder-watch-dialog li label{display:flex;gap:8px;align-items:flex-start;padding:4px 0;cursor:pointer}
-.folder-watch-dialog li small{display:block;color:#64748b}
-.folder-watch-dialog .buttons{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
-.folder-watch-dialog .buttons button{border:0;border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer;background:#2563eb;color:#fff}
-.folder-watch-dialog .buttons button.secondary{background:#e2e8f0;color:#0f172a}
-.folder-share-section{margin-top:10px;padding:10px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);display:grid;gap:6px}
-.folder-share-title{font-weight:700}
-.folder-share-title small{font-weight:400;opacity:.75}
-.folder-share-path{width:100%;box-sizing:border-box;padding:8px;border-radius:6px;border:1px solid #444;background:#111;color:#fff}
-.folder-share-generate{border:0;border-radius:6px;padding:8px;background:#2563eb;color:#fff;font-weight:700;cursor:pointer}
-.folder-share-generate:disabled{opacity:.5;cursor:default}
-.folder-share-note{margin:0;font-size:12px;opacity:.8}
-.folder-share-banner{margin:8px 0;padding:10px 12px;border-radius:8px;background:#eff6ff;color:#0f172a;border:1px solid #93c5fd;font-size:13px}
-.folder-share-banner p{margin:6px 0}
+.folder-watch-dialog li small{display:block;color:var(--ui-text-muted,rgba(236,238,241,.58))}
+.folder-watch-dialog input[type=checkbox]{accent-color:var(--ui-active-bg,#eceef1)}
+.folder-watch-dialog .buttons{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
+.folder-watch-dialog .buttons button{height:34px;border:1px solid var(--ui-active-bg,#eceef1);border-radius:7px;padding:0 14px;font:600 12.5px var(--ui-font,system-ui,sans-serif);cursor:pointer;background:var(--ui-active-bg,#eceef1);color:var(--ui-active-fg,#17191c)}
+.folder-watch-dialog .buttons button.secondary{border-color:var(--ui-border,rgba(255,255,255,.1));background:var(--ui-raised,rgba(255,255,255,.06));color:var(--ui-text,#eceef1)}
+.folder-share-section{margin-top:12px;padding:12px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid var(--ui-border,rgba(255,255,255,.08));display:grid;gap:8px}
+.folder-share-title{display:flex;align-items:center;gap:6px;font-weight:600;font-size:13px}
+.folder-share-title small{font-weight:400;color:var(--ui-text-muted,rgba(236,238,241,.58))}
+.folder-share-path{width:100%;box-sizing:border-box;height:36px;padding:0 10px;border-radius:7px;border:1px solid var(--ui-border,rgba(255,255,255,.08));background:rgba(0,0,0,.28);color:var(--ui-text,#eceef1);font:400 13px var(--ui-font,system-ui,sans-serif)}
+.folder-share-generate{height:36px;border:1px solid var(--ui-border,rgba(255,255,255,.08));border-radius:7px;padding:0 12px;background:var(--ui-raised,rgba(255,255,255,.06));color:var(--ui-text,#eceef1);font:600 13px var(--ui-font,system-ui,sans-serif);cursor:pointer}
+.folder-share-generate:hover:not(:disabled){background:rgba(255,255,255,.12)}
+.folder-share-generate:disabled{opacity:.45;cursor:default}
+.folder-share-note{margin:0;font-size:12px;color:var(--ui-text-muted,rgba(236,238,241,.58))}
+.folder-share-banner{margin:4px 0;padding:12px;border-radius:10px;background:rgba(143,193,255,.1);color:var(--ui-text,#eceef1);border:1px solid rgba(143,193,255,.35);font-size:13px;text-align:left}
+.folder-share-banner p{margin:6px 0;text-align:left!important}
 .folder-share-path-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.folder-share-path-row code{flex:1;min-width:0;overflow-wrap:anywhere;background:#dbeafe;padding:4px 6px;border-radius:4px}
-.folder-share-path-row button{border:0;border-radius:6px;padding:6px 10px;background:#2563eb;color:#fff;cursor:pointer}
+.folder-share-path-row code{flex:1;min-width:0;overflow-wrap:anywhere;background:rgba(0,0,0,.3);padding:5px 8px;border-radius:6px;font-size:12px}
+.folder-share-path-row button{height:30px;border:none;border-radius:7px;padding:0 12px;background:var(--ui-active-bg,#eceef1);color:var(--ui-active-fg,#17191c);font:600 12px var(--ui-font,system-ui,sans-serif);cursor:pointer}
 `;
+const FOLDER_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>';
+const REOPEN_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>';
 
 const isModelFile = (name = "") => MODEL_EXTENSIONS.some((ext) => name.toLowerCase().endsWith(ext));
 const baseName = (name = "") => name.replace(/\.[^/.]+$/, "").toLowerCase();
@@ -181,7 +188,7 @@ export function setupFolderWatch(api) {
     actions.className = "folder-watch-actions";
     const openButton = document.createElement("button");
     openButton.type = "button";
-    openButton.textContent = "📁 Abrir pasta";
+    openButton.innerHTML = `${FOLDER_ICON}<span>Abrir pasta</span>`;
     openButton.title = "Carregar todos os IFC/XKT/GLB de uma pasta e avisar quando algum for atualizado";
     const reopenButton = document.createElement("button");
     reopenButton.type = "button";
@@ -207,7 +214,7 @@ export function setupFolderWatch(api) {
     const shareSection = document.createElement("div");
     shareSection.className = "folder-share-section";
     shareSection.innerHTML = `
-        <div class="folder-share-title">📁 Link da pasta <small>(sem enviar arquivos • não expira)</small></div>
+        <div class="folder-share-title">${FOLDER_ICON}Link da pasta <small>sem enviar arquivos, não expira</small></div>
         <input type="text" class="folder-share-path" placeholder="Caminho na rede, ex.: \\\\Servidor\\...\\IFCs" aria-label="Caminho da pasta na rede">
         <button type="button" class="folder-share-generate">Gerar link da pasta</button>
         <p class="folder-share-note"></p>`;
@@ -301,7 +308,7 @@ export function setupFolderWatch(api) {
         const pathText = share.path || share.folder;
         shareBanner.innerHTML = "";
         const title = document.createElement("strong");
-        title.textContent = `📁 Projeto compartilhado por link de pasta (${share.models.length} modelo(s))`;
+        title.textContent = `Projeto compartilhado por link de pasta (${share.models.length} modelo(s))`;
         const info = document.createElement("p");
         info.textContent = `Clique em “Abrir pasta” e escolha a pasta “${share.folder}”. Na janela do Windows, cole o caminho abaixo na barra de endereço:`;
         const pathRow = document.createElement("div");
@@ -335,7 +342,7 @@ export function setupFolderWatch(api) {
         }
         chip.hidden = false;
         chip.classList.toggle("is-paused", paused);
-        chipText.textContent = `📁 ${directoryHandle.name} • ${tracked.size} modelo(s) • ${paused ? "pausado" : "vigiando"}`;
+        chipText.textContent = `${directoryHandle.name} | ${tracked.size} modelo(s) | ${paused ? "pausado" : "vigiando"}`;
         chipPause.textContent = paused ? "Retomar" : "Pausar";
     }
 
@@ -541,7 +548,7 @@ export function setupFolderWatch(api) {
         const title = document.createElement("h3");
         title.textContent = pending.length > 1 ? `${pending.length} modelos mudaram na pasta` : "Um modelo mudou na pasta";
         const text = document.createElement("div");
-        text.textContent = `📁 ${directoryHandle.name}. Deseja atualizar no visualizador?`;
+        text.textContent = `Pasta ${directoryHandle.name}. Deseja atualizar no visualizador?`;
         const list = document.createElement("ul");
         for (const item of pending) {
             const info = current.get(item.name);
@@ -627,7 +634,7 @@ export function setupFolderWatch(api) {
         lastHandle = await dbGet(LAST_KEY);
         const show = Boolean(lastHandle) && (!directoryHandle || !(await lastHandle.isSameEntry?.(directoryHandle)));
         reopenButton.hidden = !show;
-        if (show) reopenButton.textContent = `↻ Reabrir “${lastHandle.name}”`;
+        if (show) { reopenButton.innerHTML = `${REOPEN_ICON}<span></span>`; reopenButton.querySelector("span").textContent = `Reabrir “${lastHandle.name}”`; reopenButton.title = `Reabrir a pasta ${lastHandle.name}`; }
     }
 
     reopenButton.addEventListener("click", async () => {
