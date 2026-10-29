@@ -91,10 +91,17 @@ function buildSteps() {
 }
 
 const STYLE = `
-.tour-blocker{position:fixed;inset:0;z-index:400100;background:transparent}
-.tour-spot{position:fixed;z-index:400101;border-radius:12px;box-shadow:0 0 0 9999px rgba(12,14,18,.5),0 0 0 2px rgba(255,255,255,.9);pointer-events:none;transition:left .25s ease,top .25s ease,width .25s ease,height .25s ease,border-radius .25s ease}
-.tour-spot.is-center{left:50%!important;top:50%!important;width:0!important;height:0!important;box-shadow:0 0 0 9999px rgba(12,14,18,.5)}
+.tour-spot{position:fixed;z-index:400101;border-radius:12px;box-shadow:0 0 0 9999px rgba(12,14,18,.42),0 0 0 2px rgba(255,255,255,.9);pointer-events:none;transition:left .25s ease,top .25s ease,width .25s ease,height .25s ease,border-radius .25s ease,box-shadow .3s ease}
+.tour-spot.is-free{box-shadow:0 0 0 9999px rgba(12,14,18,0),0 0 0 2px rgba(255,255,255,.9)}
+.tour-spot.is-center{left:50%!important;top:50%!important;width:0!important;height:0!important;box-shadow:0 0 0 9999px rgba(12,14,18,.42)}
+.tour-spot.is-center.is-free{box-shadow:0 0 0 9999px rgba(12,14,18,0)}
 .tour-card{position:fixed;z-index:400102;width:min(340px,calc(100vw - 24px));box-sizing:border-box;padding:16px 16px 12px;border:1px solid var(--ui-border,rgba(255,255,255,.08));border-radius:var(--ui-radius-lg,14px);background:var(--ui-surface-solid,#1a1c20);color:var(--ui-text,#eceef1);box-shadow:0 14px 40px rgba(8,10,14,.4);font:400 13px/1.5 var(--ui-font,system-ui,sans-serif);transition:left .25s ease,top .25s ease}
+.tour-card .tour-drag{position:relative;margin:-4px -4px 0;padding:4px 26px 0 4px;border-radius:8px;cursor:grab;user-select:none;-webkit-user-select:none;touch-action:none}
+.tour-card.is-dragging .tour-drag{cursor:grabbing}
+.tour-card.is-dragging{transition:none}
+.tour-card .tour-grip{position:absolute;top:6px;right:4px;width:14px;height:14px;fill:var(--ui-text-muted,rgba(236,238,241,.58))}
+.tour-card .tour-drag:hover .tour-grip{fill:var(--ui-text,#eceef1)}
+.tour-card .tour-try{margin-top:8px;font-size:12px;color:var(--ui-text-muted,rgba(236,238,241,.58))}
 .tour-card .tour-step{font-size:11.5px;color:var(--ui-text-muted,rgba(236,238,241,.58));margin-bottom:4px;font-variant-numeric:tabular-nums}
 .tour-card h3{margin:0 0 6px;font-size:16px;font-weight:600;letter-spacing:-.01em}
 .tour-card p{margin:0}
@@ -162,16 +169,31 @@ export function startTour() {
     const steps = buildSteps().filter((step) => isAvailable(step.target));
     let index = 0;
 
-    const blocker = document.createElement("div");
-    blocker.className = "tour-blocker";
     const spot = document.createElement("div");
     spot.className = "tour-spot";
     const card = document.createElement("section");
     card.className = "tour-card";
     card.setAttribute("role", "dialog");
-    card.setAttribute("aria-modal", "true");
+    card.setAttribute("aria-modal", "false");
     card.setAttribute("aria-label", "Tutorial do visualizador");
-    document.body.append(blocker, spot, card);
+    document.body.append(spot, card);
+
+    // Posição escolhida pelo usuário ao arrastar o cartão (vale até o fim do tour)
+    let manualPosition = null;
+    let drag = null;
+
+    const ensureMobileToolbar = (step) => {
+        if (!isMobile() || !toggle || !step.target) return;
+        const target = document.querySelector(step.target);
+        if (target?.closest("#toolbar") && !toolbar?.classList.contains("open")) toggle.click();
+    };
+
+    function placeCard(left, top) {
+        const margin = 12;
+        const rect = card.getBoundingClientRect();
+        card.style.left = `${Math.max(margin, Math.min(left, window.innerWidth - rect.width - margin))}px`;
+        card.style.top = `${Math.max(margin, Math.min(top, window.innerHeight - rect.height - margin))}px`;
+    }
 
     function position() {
         const step = steps[index];
@@ -181,44 +203,58 @@ export function startTour() {
 
         if (!target) {
             spot.classList.add("is-center");
-            card.style.left = `${(window.innerWidth - cardRect.width) / 2}px`;
-            card.style.top = `${(window.innerHeight - cardRect.height) / 2}px`;
+        } else {
+            spot.classList.remove("is-center");
+            const r = target.getBoundingClientRect();
+            const pad = 6;
+            spot.style.left = `${r.left - pad}px`;
+            spot.style.top = `${r.top - pad}px`;
+            spot.style.width = `${r.width + pad * 2}px`;
+            spot.style.height = `${r.height + pad * 2}px`;
+            spot.style.borderRadius = target.id === "myNavCubeCanvas" ? "18px" : "12px";
+        }
+
+        if (manualPosition) {
+            placeCard(manualPosition.left, manualPosition.top);
             return;
         }
-        spot.classList.remove("is-center");
+        if (!target) {
+            placeCard((window.innerWidth - cardRect.width) / 2, (window.innerHeight - cardRect.height) / 2);
+            return;
+        }
+
+        // Cartão abaixo do alvo; se não couber, acima. No celular, embaixo ou em cima da tela.
         const r = target.getBoundingClientRect();
         const pad = 6;
-        spot.style.left = `${r.left - pad}px`;
-        spot.style.top = `${r.top - pad}px`;
-        spot.style.width = `${r.width + pad * 2}px`;
-        spot.style.height = `${r.height + pad * 2}px`;
-        spot.style.borderRadius = target.id === "myNavCubeCanvas" ? "18px" : "12px";
-
-        // Cartão abaixo do alvo; se não couber, acima; no celular (barra vertical), à esquerda
         let left;
         let top;
         if (isMobile()) {
-            // Celular: cartão embaixo (acima do botão "Vista inicial") ou em cima, longe do destaque
             left = (window.innerWidth - cardRect.width) / 2;
-            top = r.top + r.height / 2 > window.innerHeight * 0.55
-                ? margin
-                : window.innerHeight - cardRect.height - 84;
+            top = r.top + r.height / 2 > window.innerHeight * 0.55 ? margin : window.innerHeight - cardRect.height - 84;
         } else {
             left = r.left + r.width / 2 - cardRect.width / 2;
             top = r.bottom + margin + pad;
             if (top + cardRect.height > window.innerHeight - margin) top = r.top - cardRect.height - margin - pad;
         }
-        card.style.left = `${Math.max(margin, Math.min(left, window.innerWidth - cardRect.width - margin))}px`;
-        card.style.top = `${Math.max(margin, Math.min(top, window.innerHeight - cardRect.height - margin))}px`;
+        placeCard(left, top);
     }
 
     function render() {
         const step = steps[index];
         const last = index === steps.length - 1;
+        ensureMobileToolbar(step);
+        spot.classList.remove("is-free"); // a cada passo, destaca de novo
+        const tryHint = step.target
+            ? (isMobile() ? "Pode tocar no item destacado e testar. O tutorial espera você." : "Pode clicar no item destacado e testar. O tutorial espera você.")
+            : "Pode testar no modelo agora. O tutorial espera você.";
         card.innerHTML = `
-            <div class="tour-step">${index + 1} de ${steps.length}</div>
-            <h3>${step.title}</h3>
+            <div class="tour-drag" title="Arraste para mover o cartão (duplo clique volta ao lugar)">
+                <div class="tour-step">${index + 1} de ${steps.length}</div>
+                <svg class="tour-grip" viewBox="0 0 12 12" aria-hidden="true"><circle cx="4" cy="3" r="1"/><circle cx="8" cy="3" r="1"/><circle cx="4" cy="6" r="1"/><circle cx="8" cy="6" r="1"/><circle cx="4" cy="9" r="1"/><circle cx="8" cy="9" r="1"/></svg>
+                <h3>${step.title}</h3>
+            </div>
             <p>${step.body}</p>
+            <p class="tour-try">${tryHint}</p>
             <div class="tour-progress" aria-hidden="true">${steps.map((_, i) => `<span class="${i <= index ? "is-done" : ""}"></span>`).join("")}</div>
             <div class="tour-actions">
                 <button type="button" class="tour-skip" data-action="close">${last ? "Fechar" : "Pular tutorial"}</button>
@@ -233,11 +269,13 @@ export function startTour() {
 
     function close() {
         markSeen();
-        blocker.remove();
         spot.remove();
         card.remove();
         window.removeEventListener("resize", position);
         document.removeEventListener("keydown", onKey, true);
+        document.removeEventListener("pointerdown", onPagePointer, true);
+        window.removeEventListener("pointermove", onDragMove);
+        window.removeEventListener("pointerup", onDragEnd);
         if (openedToolbar && toolbar?.classList.contains("open")) toggle.click();
         running = null;
     }
@@ -253,15 +291,58 @@ export function startTour() {
         render();
     }
 
+    // Teclado: setas sempre trocam de passo; Enter e Esc só quando o foco está no cartão
+    // (assim Esc continua saindo da medição, e os atalhos do visualizador funcionam)
     function onKey(event) {
-        if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); }
-        else if (event.key === "ArrowRight" || event.key === "Enter") { event.preventDefault(); event.stopPropagation(); go(1); }
-        else if (event.key === "ArrowLeft") { event.preventDefault(); event.stopPropagation(); go(-1); }
-        else event.stopPropagation(); // atalhos do visualizador não disparam durante o tour
+        const target = event.target;
+        const typing = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || target?.isContentEditable;
+        if (typing) return;
+        const inCard = card.contains(document.activeElement);
+        if (event.key === "ArrowRight" || (inCard && event.key === "Enter" && !target.closest?.("button"))) {
+            event.preventDefault(); event.stopPropagation(); go(1);
+        } else if (event.key === "ArrowLeft") {
+            event.preventDefault(); event.stopPropagation(); go(-1);
+        } else if (inCard && event.key === "Escape") {
+            event.preventDefault(); event.stopPropagation(); close();
+        }
     }
 
-    // Cliques no tour não chegam ao resto da página (no celular, fechariam a barra de ferramentas)
-    blocker.addEventListener("click", (event) => event.stopPropagation());
+    // Quando a pessoa usa a tela (clica num botão, gira o modelo), o escurecimento sai
+    // para ela ver o que abriu; o cartão continua ali para seguir o tutorial.
+    function onPagePointer(event) {
+        if (card.contains(event.target)) return;
+        spot.classList.add("is-free");
+        setTimeout(position, 250); // painéis que abrem podem mover os botões
+    }
+
+    // Arrastar o cartão pelo título
+    function onDragStart(event) {
+        const handle = event.target.closest(".tour-drag");
+        if (!handle || event.button > 0) return;
+        const rect = card.getBoundingClientRect();
+        drag = { dx: event.clientX - rect.left, dy: event.clientY - rect.top, id: event.pointerId };
+        card.classList.add("is-dragging");
+        handle.setPointerCapture?.(event.pointerId);
+        event.preventDefault();
+    }
+    function onDragMove(event) {
+        if (!drag) return;
+        manualPosition = { left: event.clientX - drag.dx, top: event.clientY - drag.dy };
+        placeCard(manualPosition.left, manualPosition.top);
+    }
+    function onDragEnd() {
+        if (!drag) return;
+        drag = null;
+        card.classList.remove("is-dragging");
+    }
+
+    card.addEventListener("pointerdown", onDragStart);
+    card.addEventListener("dblclick", (event) => {
+        if (!event.target.closest(".tour-drag")) return;
+        manualPosition = null;
+        position();
+    });
+    // Cliques no cartão não chegam ao resto da página (no celular, fechariam a barra)
     card.addEventListener("click", (event) => {
         event.stopPropagation();
         const action = event.target.closest("[data-action]")?.dataset.action;
@@ -269,8 +350,11 @@ export function startTour() {
         else if (action === "back") go(-1);
         else if (action === "close") close();
     });
+    window.addEventListener("pointermove", onDragMove);
+    window.addEventListener("pointerup", onDragEnd);
     window.addEventListener("resize", position);
     document.addEventListener("keydown", onKey, true);
+    document.addEventListener("pointerdown", onPagePointer, true);
 
     running = { close };
     render();
