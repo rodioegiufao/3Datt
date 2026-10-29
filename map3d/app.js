@@ -17,7 +17,7 @@ async function getBuildings(b){
   const params=new URLSearchParams({south:String(b.south),west:String(b.west),north:String(b.north),east:String(b.east)});
   const res=await fetch('/api/map3d-buildings?'+params.toString(),{signal:AbortSignal.timeout(90000)});
   let json;try{json=await res.json()}catch{throw Error('API de edifícios respondeu de forma inválida (HTTP '+res.status+'). Verifique a rota /api/map3d-buildings na Vercel.');}
-  if(!res.ok)throw Error(json.error||('Consulta de edificações falhou (HTTP '+res.status+')'));
+  if(!res.ok){console.error('Map3D API:',json.details||json);throw Error(json.error||('Consulta de edificações falhou (HTTP '+res.status+')'));}
   return (json.elements||[]).filter(x=>x.type==='way'&&x.geometry?.length>=4).map(x=>{
     const h=parseFloat((x.tags?.height||'').replace(',','.')),n=Number(x.tags?.['building:levels']);
     const height=Number.isFinite(h)&&h>1&&h<500?h:Number.isFinite(n)&&n>0&&n<150?n*3:9;
