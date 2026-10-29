@@ -25,3 +25,7 @@ Acesse `/map3d/` em qualquer hospedagem estática HTTPS (GitHub Pages/Vercel). N
 
 ## Observação de implementação
 O app só usa HTML, CSS e JavaScript ES Modules. `mesh.js` contém triangulação ear clipping simples; polígonos não simples são ignorados quando não trianguláveis. O mapa 3D requer WebGL e internet.
+
+
+## Correção Vercel cleanUrls
+Todos os assets locais usam caminhos absolutos `/map3d/...`, para funcionar tanto em `/map3d` quanto em `/map3d/`.

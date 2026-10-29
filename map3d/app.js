@@ -1,4 +1,4 @@
-import {buildMesh,toGLB,sizeOf} from './mesh.js';
+import {buildMesh,toGLB,sizeOf} from '/map3d/mesh.js';
 const $=id=>document.getElementById(id),status=(msg,error=false)=>{$('status').textContent=msg;$('status').className='status '+(error?'error':'good')};
 const C=window.Cesium;C.Ion.defaultAccessToken=undefined;
 const viewer=new C.Viewer('map',{animation:false,timeline:false,baseLayerPicker:false,geocoder:false,homeButton:true,sceneModePicker:false,navigationHelpButton:false,infoBox:false,selectionIndicator:false,terrainProvider:new C.EllipsoidTerrainProvider(),baseLayer:false});
