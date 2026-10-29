@@ -1,13 +1,9 @@
 // Aparência da cena 3D: fundo em degradê, grade do piso (linhas finas de 1 m, como
-// a original) que vai sumindo nas bordas, sombra de contato sob o prédio,
+// a original) que vai sumindo nas bordas,
 // oclusão de ambiente (SAO) e arestas suaves.
 // Tudo que define a "cara" da cena fica aqui, num lugar só.
 import {
-    LineSet,
-    Mesh,
-    ReadableGeometry,
-    PhongMaterial,
-    Texture
+    LineSet
 } from "https://cdn.jsdelivr.net/npm/@xeokit/xeokit-sdk@2.6.107/dist/xeokit-sdk.min.es.js";
 
 // ---------------------------------------------------------------------------
@@ -28,7 +24,6 @@ export const SCENE_STYLE = Object.freeze({
         { reach: 1.48, opacity: 0.14 },
         { reach: 1.7, opacity: 0.07 }
     ],
-    contactShadow: "rgba(24, 32, 42, 0.32)",
 
     // Arestas das peças (cinza translúcido no lugar do preto puro)
     edgeColor: [0.16, 0.18, 0.21],
@@ -45,8 +40,6 @@ export const SCENE_STYLE = Object.freeze({
     }
 });
 
-const SHADOW_ID = "sceneStyleContactShadow";
-const SHADOW_TEXTURE_SIZE = 512;   // a sombra é desfocada: textura pequena basta
 const MIN_GRID_HALF = 50;          // m (a grade original tinha 100 m de lado)
 const GRID_REACH = 1.0;            // meia-largura da faixa principal = maior lado do prédio
 const MAX_LINES_PER_SIDE = 400;    // acima disso as células ficam maiores (grade leve)
@@ -116,26 +109,8 @@ function gridBandLines(outer, inner, cell, y) {
     return { positions, indices };
 }
 
-/** Sombra de contato: elipse desfocada numa textura pequena (transparente fora dela). */
-function drawShadowTexture() {
-    const px = SHADOW_TEXTURE_SIZE;
-    const canvas = document.createElement("canvas");
-    canvas.width = px;
-    canvas.height = px;
-    const ctx = canvas.getContext("2d");
-    const gradient = ctx.createRadialGradient(px / 2, px / 2, 0, px / 2, px / 2, px / 2);
-    const strong = SCENE_STYLE.contactShadow;
-    const medium = strong.replace(/[\d.]+\)$/, (a) => `${(parseFloat(a) * 0.55).toFixed(3)})`);
-    gradient.addColorStop(0, strong);
-    gradient.addColorStop(0.55, medium);
-    gradient.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, px, px);
-    return canvas.toDataURL("image/png");
-}
-
 /**
- * Aplica o visual da cena e mantém a grade e a sombra ajustadas ao tamanho dos modelos.
+ * Aplica o visual da cena e mantém a grade ajustada ao tamanho dos modelos.
  * Chamado uma vez na inicialização do visualizador.
  */
 export function setupSceneStyle({ viewer, requestRenderFrame = () => {}, enableSAO = true }) {
@@ -158,19 +133,11 @@ export function setupSceneStyle({ viewer, requestRenderFrame = () => {}, enableS
     }
 
     let gridSets = [];
-    let shadow = null;
     let lastKey = "";
 
     const destroyAll = () => {
         gridSets.forEach((set) => set.destroy());
         gridSets = [];
-        if (shadow) {
-            shadow.mesh.destroy();
-            shadow.material.destroy();
-            shadow.geometry.destroy();
-            shadow.texture.destroy();
-            shadow = null;
-        }
     };
 
     const build = () => {
@@ -218,44 +185,6 @@ export function setupSceneStyle({ viewer, requestRenderFrame = () => {}, enableS
             inner = outer;
         });
 
-        // Sombra de contato sob o prédio
-        if (a) {
-            const sx = (dx / 2) * 1.55;
-            const sz = (dz / 2) * 1.55;
-            const cx = (box[0] + box[3]) / 2;
-            const cz = (box[2] + box[5]) / 2;
-            const y = groundY - 0.01;
-            const texture = new Texture(scene, { src: drawShadowTexture(), flipY: false });
-            const geometry = new ReadableGeometry(scene, {
-                primitive: "triangles",
-                positions: [cx - sx, y, cz - sz, cx + sx, y, cz - sz, cx + sx, y, cz + sz, cx - sx, y, cz + sz],
-                normals: [0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0],
-                uv: [0, 0, 1, 0, 1, 1, 0, 1],
-                indices: [0, 2, 1, 0, 3, 2]
-            });
-            const material = new PhongMaterial(scene, {
-                diffuse: [0, 0, 0],
-                ambient: [0, 0, 0],
-                specular: [0, 0, 0],
-                emissive: [1, 1, 1],
-                emissiveMap: texture,
-                diffuseMap: texture,      // fornece só o alfa (difusa = 0)
-                alphaMode: "blend",
-                alpha: 1,
-                backfaces: true
-            });
-            const mesh = new Mesh(scene, {
-                id: SHADOW_ID,
-                isObject: false,
-                geometry,
-                material,
-                pickable: false,
-                collidable: false,
-                clippable: false,
-                edges: false
-            });
-            shadow = { mesh, material, geometry, texture };
-        }
         requestRenderFrame();
     };
 
