@@ -21,8 +21,21 @@ export function setupCollisionPanelControls() {
         return;
     }
 
+    // O botão acompanha o painel: fechou por qualquer caminho (✕, Esc, outro painel) → desmarca
+    new MutationObserver(() => {
+        collisionPanelToggleButton?.classList.toggle("active", !collisionPanel.hidden);
+        collisionPanelToggleButton?.setAttribute("aria-pressed", String(!collisionPanel.hidden));
+    }).observe(collisionPanel, { attributes: true, attributeFilter: ["hidden"] });
+
     collisionPanelToggleButton?.addEventListener("click", async () => {
         if (!collisionFeatureAllowed) return;
+        // Segundo clique no botão fecha o painel
+        if (!collisionPanel.hidden) {
+            const closeButton = collisionPanel.querySelector("#closeCollisionPanel");
+            if (closeButton) closeButton.click();
+            else collisionPanel.hidden = true;
+            return;
+        }
         collisionPanel.hidden = false;
         collisionPanelToggleButton.classList.add("active");
         if (!clashFeaturePromise) {
