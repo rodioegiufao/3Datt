@@ -52,8 +52,14 @@ for (const html of fs.readdirSync(path.join(root, "3D")).filter((name) => name.e
 console.log("viewer loading architecture: ok");
 // Regressão: IDs IFC repetidos devem permanecer distintos na cena federada.
 const vm = require("node:vm");
-assert.match(authenticated, /xktLoader\.load\(\{\s*id, src,[\s\S]*?globalizeObjectIds: true,/);
-assert.match(core, /loader\.load\(\{ id, src, globalizeObjectIds: true,/);
+// Páginas de projeto: XKT, GLB e glTF pelo carregador único (app/model-format.js), com IDs globalizados no XKT
+assert.match(authenticated, /modelLoader\.load\(options\)/);
+assert.match(authenticated, /xktOptions:\s*\{[\s\S]*?globalizeObjectIds: true,/);
+const modelFormat = read("3D/viewer/app/model-format.js");
+assert.match(modelFormat, /GLTFLoaderPlugin/);
+assert.match(modelFormat, /xktLoader\.load\(\{ id, xkt: buffer, \.\.\.rest \}\)/);
+assert.match(core, /createModelLoader\(viewer, loader\)/);
+assert.match(core, /xktOptions: \{ src, globalizeObjectIds: true,/);
 assert.match(read("3D/ifc_upload.js"), /bridge\.xktLoader\.load\(\{\s*globalizeObjectIds: true,/);
 const objects = {
     "220V#peca-1": { visible: true },
