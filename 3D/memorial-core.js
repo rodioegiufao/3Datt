@@ -136,6 +136,8 @@ export function separarCor(descricao) {
 export function limparDescricao(descricao) {
     return String(descricao ?? "")
         .replace(/^\s*-\s*(SINAPI|COMPOSI[CÇ][AÃ]O PR[OÓ]PRIA)\s*-\s*(METROS|UNIDADES|M2|M3|KG)\s*-\s*/i, "")
+        .replace(/^\s*\.S\.O\.S\s+/i, "")
+        .replace(/^\s*\./, "")
         .replace(/\s*-\s*,\s*/g, ", ")
         .replace(/\s+/g, " ")
         .trim();
@@ -182,6 +184,19 @@ function grupoBate(filtro, grupo) {
 function condicaoAtendida(mostrarSe, gruposPresentes) {
     if (!mostrarSe.length) return true;
     return mostrarSe.some((f) => [...gruposPresentes].some((g) => grupoBate(f, g)));
+}
+
+const SIGLAS = new Set(["CFTV", "SPDA", "DR", "DPS", "TV", "LED", "PVC", "GLP", "UTP", "IFC", "BEP", "QDC", "PE", "SINAPI"]);
+
+/** "QUADROS DE DISTRIBUIÇÃO" -> "Quadros de distribuição" (mantém siglas); títulos já em minúsculas ficam iguais. */
+export function tituloFrase(titulo) {
+    const texto = String(titulo ?? "").trim();
+    if (texto !== texto.toLocaleUpperCase("pt-BR")) return texto;
+    const frase = texto.split(/(\s+|[()/,–-])/).map((parte) => {
+        const limpo = parte.replace(/[^A-ZÀ-Ú0-9]/gi, "");
+        return SIGLAS.has(limpo) ? parte : parte.toLocaleLowerCase("pt-BR");
+    }).join("");
+    return frase.charAt(0).toLocaleUpperCase("pt-BR") + frase.slice(1);
 }
 
 const comparar = (a, b) => a.localeCompare(b, "pt-BR", { numeric: true, sensitivity: "base" });
@@ -265,6 +280,7 @@ export function montarMemorial({ itens = [], associacoes = [], config, disciplin
         DISCIPLINA_TEXTO: disc.nome.toLocaleLowerCase("pt-BR")
     };
     campos.ONDE = campos.ENDERECO || campos.LOCAL || "local indicado em projeto";
+    campos.CLIENTE_FRASE = campos.CLIENTE ? `, para o cliente ${campos.CLIENTE}` : "";
     campos.DISCIPLINAS = campos.DISCIPLINA;
 
     const normas = config.normas
@@ -277,11 +293,30 @@ export function montarMemorial({ itens = [], associacoes = [], config, disciplin
         .filter((l) => l.estruturas.includes(roteiro) && condicaoAtendida(l.mostrarSe, gruposPresentes))
         .sort((a, b) => a.ordem - b.ordem);
 
+    // Um título com um único subtítulo vira um título só (texto do pai + texto do filho),
+    // evitando a subdivisão única "8. Condutores / 8.1 Condutores dos circuitos".
+    const linhasRoteiro = [];
+    for (let i = 0; i < linhas.length; i += 1) {
+        const l = linhas[i];
+        const filhos = [];
+        for (let j = i + 1; j < linhas.length && linhas[j].nivel > l.nivel; j += 1) {
+            if (linhas[j].nivel === l.nivel + 1) filhos.push(j);
+        }
+        const unicoFilho = filhos.length === 1 && (filhos[0] === linhas.length - 1 || linhas[filhos[0] + 1]?.nivel <= l.nivel)
+            ? linhas[filhos[0]] : null;
+        if (unicoFilho && unicoFilho.nivel === l.nivel + 1) {
+            linhasRoteiro.push({ ...l, texto: `${l.texto}\n${unicoFilho.texto}`, listar: [...l.listar, ...unicoFilho.listar] });
+            i = filhos[0];
+            continue;
+        }
+        linhasRoteiro.push(l);
+    }
+
     // um subtítulo não pode ficar mais de um nível abaixo do anterior (ex.: 2 sem 1 antes)
     let nivelAnterior = 0;
     const gruposListados = new Set();
     const anexo = [];
-    const titulos = linhas.map((l) => {
+    const titulos = linhasRoteiro.map((l) => {
         const nivel = Math.min(l.nivel, nivelAnterior + 1);
         nivelAnterior = nivel;
         const materiais = [];
@@ -291,7 +326,7 @@ export function montarMemorial({ itens = [], associacoes = [], config, disciplin
                 materiais.push(...linhasDoGrupo(g));
             });
         });
-        if (materiais.length) anexo.push({ titulo: l.titulo, itens: materiais });
+        if (materiais.length) anexo.push({ titulo: tituloFrase(l.titulo), itens: materiais });
         const conteudo = converterTexto(l.texto, campos);
         return { nivel, titulo: l.titulo, conteudo, materiais: materiais.map((m) => m.descricao) };
     });

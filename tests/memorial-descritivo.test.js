@@ -132,15 +132,20 @@ function respostaFake() {
         dados: { obra: "Escola Modelo", cliente: "SEDUC", endereco: "Rua A, 10", local: "Boa Vista / RR", revisao: "R01", dataEmissao: "novembro de 2026", arquivoIfc: "IFC-LOG-ESC" }
     });
     const titulos = payload.titulos.map((t) => t.titulo);
-    ["OBJETO", "NORMAS TÉCNICAS", "DOCUMENTAÇÃO", "Arquitetura do sistema", "Eletrodutos flexíveis", "Cabos de par trançado", "Patch panels", "Patch cords e line cords", "RACKS E ACESSÓRIOS", "CERTIFICAÇÃO E TESTES", "CONSIDERAÇÕES FINAIS"]
+    ["OBJETO", "NORMAS TÉCNICAS E LEGISLAÇÃO", "DOCUMENTOS DE REFERÊNCIA", "CONDIÇÕES GERAIS", "Arquitetura do sistema", "INFRAESTRUTURA DE ENCAMINHAMENTO", "Cabos de par trançado", "Patch panels", "Patch cords e line cords", "RACKS E ACESSÓRIOS", "CERTIFICAÇÃO E TESTES", "SEGURANÇA DO TRABALHO", "RECEBIMENTO E DOCUMENTAÇÃO DE ENTREGA", "CRITÉRIOS DE MEDIÇÃO", "CONSIDERAÇÕES FINAIS"]
         .forEach((t) => assert.ok(titulos.includes(t), `faltou o título ${t}`));
-    ["Cabos ópticos", "TELEFONIA", "CIRCUITO FECHADO DE TV (CFTV)", "Eletrocalhas e leitos para cabos", "QUADROS DE DISTRIBUIÇÃO"]
+    ["Cabos ópticos", "TELEFONIA", "CIRCUITO FECHADO DE TV (CFTV)", "Eletrocalhas e leitos para cabos", "QUADROS DE DISTRIBUIÇÃO", "Eletrodutos flexíveis"]
         .forEach((t) => assert.ok(!titulos.includes(t), `título ${t} não deveria aparecer sem materiais`));
-    assert.strictEqual(payload.titulos.find((t) => t.titulo === "INFRAESTRUTURA").nivel, 1);
-    assert.strictEqual(payload.titulos.find((t) => t.titulo === "Eletrodutos flexíveis").nivel, 2);
-    assert.ok(payload.titulos[0].conteudo[0].texto.includes("cabeamento estruturado e telefonia da obra Escola Modelo, situada em Rua A, 10"));
-    assert.ok(payload.titulos.find((t) => t.titulo === "DOCUMENTAÇÃO").conteudo.some((b) => b.tipo === "item" && b.texto.includes("IFC-LOG-ESC")));
-    assert.ok(payload.titulos.find((t) => t.titulo === "NORMAS TÉCNICAS").conteudo.some((b) => b.tipo === "normas"));
+    // infraestrutura com um único subtítulo (eletrodutos flexíveis) vira um título só, com os dois textos
+    const infra = payload.titulos.find((t) => t.titulo === "INFRAESTRUTURA DE ENCAMINHAMENTO");
+    assert.strictEqual(infra.nivel, 1);
+    assert.ok(infra.conteudo.some((b) => b.texto?.startsWith("**Especificação.** Eletrodutos de PVC corrugado")));
+    assert.deepStrictEqual(infra.materiais, ["Eletroduto PVC flexível - Eletroduto leve - 3/4\" - Forro"]);
+    assert.strictEqual(payload.titulos.find((t) => t.titulo === "Arquitetura do sistema").nivel, 2);
+    assert.ok(payload.titulos[0].conteudo[0].texto.includes("cabeamento estruturado e telefonia da obra Escola Modelo, situada em Rua A, 10, para o cliente SEDUC."));
+    assert.ok(payload.titulos.find((t) => t.titulo === "DOCUMENTOS DE REFERÊNCIA").conteudo.some((b) => b.tipo === "item" && b.texto.includes("IFC-LOG-ESC")));
+    assert.ok(payload.titulos.find((t) => t.titulo === "NORMAS TÉCNICAS E LEGISLAÇÃO").conteudo.some((b) => b.tipo === "normas"));
+    assert.ok(payload.normas.some((n) => n.norma === "NR-18"));
     assert.ok(payload.normas.some((n) => n.norma === "ABNT NBR 14565"));
     assert.ok(payload.normas.some((n) => n.norma === "ANSI/TIA-568.2-D"));
     assert.ok(!payload.normas.some((n) => n.norma === "ANSI/TIA-568.3-D"), "norma de fibra só com fibra no IFC");
@@ -159,11 +164,13 @@ function respostaFake() {
         ], config, disciplina: "ELE", dados: { obra: "Escola Modelo", local: "Boa Vista / RR" }
     }).payload;
     const titulosEle = ele.titulos.map((t) => t.titulo);
-    ["Condutores dos circuitos", "Disjuntores termomagnéticos", "ENSAIOS E COMISSIONAMENTO", "ATERRAMENTO E EQUIPOTENCIALIZAÇÃO"].forEach((t) => assert.ok(titulosEle.includes(t), `faltou ${t}`));
-    assert.ok(!titulosEle.includes("ILUMINAÇÃO"));
-    assert.match(ele.titulos.find((t) => t.titulo === "Condutores dos circuitos").materiais[0], /\(cores: azul claro e preto\)$/);
-    assert.strictEqual(ele.anexo.find((g) => g.titulo === "Condutores dos circuitos").itens[0].quantidade, 220.46);
-    assert.ok(ele.titulos[0].conteudo[0].texto.includes("situada em Boa Vista / RR"), "sem endereço usa o local");
+    ["CONDUTORES ELÉTRICOS", "DISPOSITIVOS DE PROTEÇÃO E COMANDO", "ENSAIOS E VERIFICAÇÃO FINAL", "ATERRAMENTO E EQUIPOTENCIALIZAÇÃO"].forEach((t) => assert.ok(titulosEle.includes(t), `faltou ${t}`));
+    ["ILUMINAÇÃO", "Condutores dos circuitos", "Disjuntores termomagnéticos"].forEach((t) => assert.ok(!titulosEle.includes(t), `não deveria ter ${t}`));
+    assert.match(ele.titulos.find((t) => t.titulo === "CONDUTORES ELÉTRICOS").materiais[0], /\(cores: azul claro e preto\)$/);
+    assert.strictEqual(ele.anexo.find((g) => g.titulo === "Condutores elétricos").itens[0].quantidade, 220.46);
+    assert.ok(ele.titulos[0].conteudo[0].texto.includes("situada em Boa Vista / RR."), "sem endereço usa o local e sem cliente não cita cliente");
+    assert.strictEqual(core.tituloFrase("CIRCUITO FECHADO DE TV (CFTV)"), "Circuito fechado de TV (CFTV)");
+    assert.strictEqual(core.limparDescricao(".S.O.S CAIXA DE PASSAGEM - EMBUTIR NO PISO"), "CAIXA DE PASSAGEM - EMBUTIR NO PISO");
 
     // --- servidor: validação ---
     const memorial = require("../api/_memorial-descritivo");
@@ -188,6 +195,8 @@ function respostaFake() {
     assert.ok(xml.includes("SEDUC") && xml.includes("Rua A, 10"), "cliente e endereço na capa");
     assert.ok(xml.includes("ANEXO A — RELAÇÃO DE MATERIAIS"));
     assert.ok(xml.includes("Materiais previstos neste projeto:"));
+    assert.ok(!xml.includes("**"), "marcação de negrito não pode vazar para o Word");
+    assert.match(xml, /<w:b\/><w:bCs\/><\/w:rPr><w:t xml:space="preserve">Responsabilidades da contratada\.<\/w:t>/);
     assert.ok(xml.includes("Item &lt;w:p&gt;&amp;&quot;quebra&quot;"), "texto do usuário precisa ser escapado");
     assert.ok(docx.file("word/settings.xml").asText().includes("<w:updateFields"), "sumário atualiza ao abrir");
 

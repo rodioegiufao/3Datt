@@ -102,7 +102,7 @@ function normalizarMemorial(body = {}) {
 // ---------- blocos de XML ----------
 
 function paragrafoXml(texto) {
-  return `<w:p><w:pPr><w:spacing w:after="160"/><w:ind w:firstLine="567"/></w:pPr><w:r><w:t xml:space="preserve">${textoSeguro(texto)}</w:t></w:r></w:p>`;
+  return `<w:p><w:pPr><w:spacing w:after="160"/><w:ind w:firstLine="567"/></w:pPr>${runsComNegrito(texto)}</w:p>`;
 }
 
 function marcadorXml(runs, { recuo = 600, depois = 80 } = {}) {
@@ -110,6 +110,12 @@ function marcadorXml(runs, { recuo = 600, depois = 80 } = {}) {
 }
 
 const run = (texto, negrito = false) => `<w:r>${negrito ? "<w:rPr><w:b/><w:bCs/></w:rPr>" : ""}<w:t xml:space="preserve">${textoSeguro(texto)}</w:t></w:r>`;
+
+// "**Execução.** texto" -> trecho em negrito + texto normal
+function runsComNegrito(texto) {
+  return String(texto).split(/(\*\*[^*]+\*\*)/).filter(Boolean)
+    .map((parte) => (/^\*\*[^*]+\*\*$/.test(parte) ? run(parte.slice(2, -2), true) : run(parte))).join("");
+}
 
 function tituloXml(nivel, texto) {
   const estilo = ESTILO_TITULO[nivel];
@@ -189,7 +195,7 @@ function montarValores(memorial) {
     sumario.push(sumarioEntradaXml(numero, t.nivel === 1 ? t.titulo.toUpperCase() : t.titulo, t.nivel));
 
     const blocos = t.conteudo.map((b) => {
-      if (b.tipo === "item") return marcadorXml(run(b.texto));
+      if (b.tipo === "item") return marcadorXml(runsComNegrito(b.texto));
       if (b.tipo === "normas") {
         return memorial.normas.map((n) => marcadorXml(run(n.norma, true) + (n.descricao ? run(` — ${n.descricao}`) : ""))).join("");
       }
