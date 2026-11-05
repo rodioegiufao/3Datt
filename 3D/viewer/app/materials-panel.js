@@ -1,11 +1,14 @@
 // Módulo "materials-panel" extraído de viewer-authenticated.js (mesma lógica, só reorganizada).
-import { focusObjectById, generateMaterialsButton, lastMaterialsResults, materialsIdsPanel, materialsIdsSummary, materialsPanel, materialsPanelToggleButton, materialsResultsList, materialsSearchInput, materialsSummary } from "../viewer-authenticated.js";
+import { currentModels, focusObjectById, generateMaterialsButton, lastMaterialsResults, loadedModels, materialsIdsPanel, materialsIdsSummary, materialsPanel, materialsPanelToggleButton, materialsResultsList, materialsSearchInput, materialsSummary, viewer } from "../viewer-authenticated.js";
 import { materialsFeatureAllowed } from "./access.js";
-import { downloadMaterialsAsExcel } from "./excel.js";
-import { applyMaterialsSearch, findMaterialObjectIds, generateAndRenderMaterialsList, normalizeSearchText } from "./materials.js";
+import { abrirGeradorMemorial, downloadMaterialsAsExcel } from "./excel.js";
+import { applyMaterialsSearch, findMaterialObjectIds, generateAndRenderMaterialsList, materialsAllResults, normalizeSearchText } from "./materials.js";
+import { activeProjectKey } from "./model-loading.js";
+import { PROJECT_CONFIGS } from "../project-config.js";
 
 export const closeMaterialsPanelButton = document.getElementById("closeMaterialsPanel");
 export const downloadMaterialsExcelButton = document.getElementById("downloadMaterialsExcel");
+export const generateMemorialButton = document.getElementById("generateMemorialWord");
 export const materialsSearchButton = document.getElementById("materialsSearchButton");
 export const materialsIdsList = document.getElementById("materialsIdsList");
 export function setupMaterialsPanelControls() {
@@ -46,6 +49,26 @@ export function setupMaterialsPanelControls() {
         if (!materialsFeatureAllowed) return;
         downloadMaterialsAsExcel(lastMaterialsResults, normalizeSearchText);
     });
+    generateMemorialButton?.addEventListener("click", () => {
+        if (!materialsFeatureAllowed) return;
+        // Um memorial por IFC: lista completa (ignora o filtro de busca) + modelos carregados
+        const modelos = [...loadedModels.keys()].map((id) => {
+            const configurado = currentModels.find((m) => m.id === id);
+            const carregado = loadedModels.get(id);
+            return {
+                id,
+                src: configurado?.src || carregado?.uploadDateSrc || "",
+                displayName: configurado?.displayName || configurado?.label || carregado?.displayName || id
+            };
+        });
+        abrirGeradorMemorial({
+            itens: materialsAllResults,
+            modelos,
+            viewer,
+            normalizarBusca: normalizeSearchText,
+            obraPadrao: PROJECT_CONFIGS[activeProjectKey]?.name || ""
+        });
+    });
 
     updateMaterialsDownloadButton();
 }
@@ -56,6 +79,9 @@ export function updateMaterialsDownloadButton() {
     }
 
     downloadMaterialsExcelButton.disabled = !lastMaterialsResults.length;
+    if (generateMemorialButton) {
+        generateMemorialButton.disabled = !materialsAllResults.length;
+    }
 }
 
 export function resetMaterialsIdsPanel() {

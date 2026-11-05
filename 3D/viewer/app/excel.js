@@ -14,6 +14,12 @@ export async function downloadMaterialsAsExcel(...args) {
     }
     return (await getExcelFeature()).downloadMaterialsAsExcel(...args);
 }
+export async function abrirGeradorMemorial(...args) {
+    if (!materialsFeatureAllowed) {
+        return;
+    }
+    return (await getExcelFeature()).abrirGeradorMemorial(...args);
+}
 export async function loadAssociationDefinitionsFromExcel(...args) {
     return (await getExcelFeature()).loadAssociationDefinitionsFromExcel(...args);
 }
