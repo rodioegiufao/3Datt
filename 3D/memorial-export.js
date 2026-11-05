@@ -5,7 +5,7 @@
 // gerado por /api/gerar-memorial-word no timbrado da empresa.
 
 import { loadAssociationDefinitionsFromExcel, loadWorkbookFromExcel } from "./excel-export.js";
-import { ABAS_OBRIGATORIAS, filtrarItensPorModelo, formatarDataEmissao, lerConfiguracao, montarMemorial, nomeIfcUtil } from "./memorial-core.js";
+import { ABAS_OBRIGATORIAS, filtrarItensPorModelo, formatarDataEmissao, lerConfiguracao, montarMemorial, nomeIfcUtil, normalizarTexto } from "./memorial-core.js";
 
 const MEMORIAL_XLSX = "/3D/memorial_descritivo.xlsx";
 const BASE_XLSX = "./base_de_dados.xlsx";
@@ -25,8 +25,13 @@ function metaObjetosDoTipo(viewer, tipo, modeloId) {
 
 /** Lê do IFC carregado: nome da obra (IfcProject → IfcBuilding → IfcSite) e nome do arquivo. */
 export function lerInfoIfc(viewer, modelo) {
-    const primeiroNome = (tipo) => metaObjetosDoTipo(viewer, tipo, modelo.id).map((mo) => nomeIfcUtil(mo.name)).find(Boolean) || "";
     const arquivo = String(modelo.src || modelo.id || "").split(/[\\/]/).pop().replace(/\.(xkt|ifc|glb|gltf)$/i, "");
+    // Muitos IFC exportados do Revit trazem no IfcProject só o código do arquivo (ex.: IFC-ELE-DRL):
+    // nesse caso o nome não serve como obra e passamos para o próximo candidato.
+    const pareceCodigo = (nome) => /^(ifc|xkt)[-_ ]/i.test(nome) || normalizarTexto(nome) === normalizarTexto(arquivo);
+    const primeiroNome = (tipo) => metaObjetosDoTipo(viewer, tipo, modelo.id)
+        .map((mo) => nomeIfcUtil(mo.name))
+        .find((nome) => nome && !pareceCodigo(nome)) || "";
     return {
         obra: primeiroNome("IfcProject") || primeiroNome("IfcBuilding") || primeiroNome("IfcSite"),
         disciplina: String(modelo.displayName || modelo.label || "").trim(),
