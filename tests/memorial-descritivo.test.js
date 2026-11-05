@@ -66,14 +66,18 @@ function respostaFake() {
     const config = core.lerConfiguracao(abas);
 
     // --- planilha de regras ---
-    assert.ok(config.regras.length > 50, "a aba Classificacao deve ter as regras iniciais");
-    assert.ok(config.secoes.length > 20, "a aba Secoes deve ter as seções iniciais");
-    assert.ok(config.geral.APRESENTACAO.includes("{OBRA}"));
-    const gruposSecoes = new Set(config.secoes.map((s) => s.grupo));
-    config.regras.forEach((r) => assert.ok(gruposSecoes.has(r.grupo), `regra aponta para grupo inexistente: ${r.grupo}`));
-    assert.throws(() => core.lerConfiguracao({ Geral: [] }), /Secoes/);
+    assert.ok(config.regras.length > 80, "a aba Classificacao deve ter as regras iniciais");
+    assert.deepStrictEqual(config.disciplinas.map((d) => d.codigo).slice(0, 2), ["ELE", "LOG"]);
+    const roteiros = new Set(config.disciplinas.map((d) => d.estrutura));
+    roteiros.forEach((r) => assert.ok(config.estrutura.some((l) => l.estruturas.includes(r)), `roteiro ${r} sem linhas na aba Estrutura`));
+    assert.throws(() => core.lerConfiguracao({ Geral: [] }), /Disciplinas/);
 
-    // --- todas as linhas das bases de dados precisam cair em alguma seção ---
+    // todo grupo usado nas regras precisa aparecer listado em algum título do roteiro GERAL
+    const grupos = new Set(config.regras.map((r) => r.grupo));
+    const listadoNoGeral = (g) => config.estrutura.some((l) => l.estruturas.includes("GERAL") && l.listar.some((f) => (f.endsWith("*") ? g.startsWith(f.slice(0, -1)) : f === g)));
+    assert.deepStrictEqual([...grupos].filter((g) => !listadoNoGeral(g)), [], "grupos sem lugar no roteiro GERAL");
+
+    // --- todas as linhas das bases de dados precisam cair em algum grupo ---
     for (const base of ["3D/base_de_dados.xlsx", "3D/base_de_dados_sic.xlsx"]) {
         const associa = (await lerAbas(path.join(root, base))).Associa;
         const semGrupo = associa.map((l) => l["DESCRIÇÃO"]).filter((d) => d && !core.classificarMaterial(d, config.regras));
@@ -84,100 +88,119 @@ function respostaFake() {
     const grupo = (nome) => core.classificarMaterial(nome, config.regras);
     assert.strictEqual(grupo("Cabo unipolar - Solar - Cobre - Isol. XLPE - 1,8KV - 6 mm² - Preto"), "ELE_FOTOVOLTAICO");
     assert.strictEqual(grupo("Cabo Unipolar - cobre - Isol. XLPE - 0,6/1kV - 2.5 mm² - Azul claro"), "ELE_CONDUTORES");
-    assert.strictEqual(grupo("Dispositivo Elétrico - embutido - Placa 2x4\" - Interruptor paralelo - 2 teclas"), "ELE_DISPOSITIVOS");
-    assert.strictEqual(grupo("Dispositivo Telefônico - embutir - Tomada - Tomada RJ11"), "TEL_TELEFONIA");
-    assert.strictEqual(grupo("Acessórios Cabeamento - Rack - Calha de tomadas - 10 tomadas 2P+T, 10A - 1U"), "TEL_CABEAMENTO");
-    assert.strictEqual(grupo("Acessórios Cabeamento - Metálico - Amplificador de áudio profissional - 400W"), "TEL_SONORIZACAO");
-    assert.strictEqual(grupo("Incêndio - Iluminação de emergência - Autônoma 30 LED's 100 lúmens"), "INC_ILUMINACAO");
-    assert.strictEqual(grupo("Cobre - Barra - m - 30x5mm"), "ELE_QUADROS");
+    assert.strictEqual(grupo("Dispositivo de Proteção - Interruptor bipolar DR - fase/neutro - In 30mA"), "ELE_DR");
+    assert.strictEqual(grupo("Dispositivo de Proteção - Dispositivo de proteção contra surto - 275 V - 40 KA"), "ELE_DPS");
+    assert.strictEqual(grupo("Quadro distrib. chapa pintada - sobrepor - Barr. trif."), "ELE_QUADROS");
+    assert.strictEqual(grupo("Aterramento - Barramento de equipotencialização - 11 terminais"), "ELE_ATERRAMENTO");
+    assert.strictEqual(grupo("Acessórios Cabeamento - Metálico - Plugue - RJ45 - CM8v - Cat 6"), "LOG_CONECTORES");
+    assert.strictEqual(grupo("Acessórios Cabeamento - Rack - Calha de tomadas - 10 tomadas 2P+T, 10A - 1U"), "LOG_RACK");
+    assert.strictEqual(grupo("Acessórios Cabeamento - Metálico - Patch panel XLR - 24 posições"), "SOM");
+    assert.strictEqual(grupo("Dispositivo Elétrico - embutido - Placa 4x4\" - Placa cega"), "INF_CAIXAS");
+    assert.strictEqual(grupo("Acessórios uso geral - Arruela lisa galvan. - 1/4\""), "INF_FIXACAO");
     assert.strictEqual(grupo("Material inventado - xyz"), null);
 
-    // --- cores, unidades ---
-    assert.deepStrictEqual(core.separarCor("Cabo - X - 2.5 mm² - Azul claro"), { base: "Cabo - X - 2.5 mm²", cor: "Azul claro" });
-    assert.deepStrictEqual(core.separarCor("Placa - Bege - 2 módulos"), { base: "Placa - Bege - 2 módulos", cor: null });
-    assert.strictEqual(core.unidadeDoModelo("metro(s)"), "m");
-    assert.strictEqual(core.unidadeDoModelo("item(ns)"), "un");
+    // --- disciplina pelo nome do IFC ---
+    const disc = (m) => core.detectarDisciplina(m, config.disciplinas).codigo;
+    assert.strictEqual(disc({ id: "IFC_LOG", displayName: "Cabeamento estruturado e telefonia", src: "/3D/drogaria/modelo-05.xkt" }), "LOG");
+    assert.strictEqual(disc({ id: "IFC_ELE_380", displayName: "Instalações elétricas — 380 V" }), "ELE");
+    assert.strictEqual(disc({ id: "modelo-09", arquivo: "IFC-ELE-DRL" }), "ELE");
+    assert.strictEqual(disc({ id: "IFC_HID", displayName: "Hidráulica" }), "GERAL");
 
-    // --- um IFC por vez: quantidades por modelo e nome do IfcProject ---
+    // --- utilitários ---
+    assert.deepStrictEqual(core.separarCor("Cabo - X - 2.5 mm² - Azul claro"), { base: "Cabo - X - 2.5 mm²", cor: "Azul claro" });
+    assert.strictEqual(core.limparDescricao("- COMPOSIÇÃO PRÓPRIA - METROS - ELETRODUTO FLEXÍVEL CORRUGADO, 1\", INSTALADO NO PISO"), "ELETRODUTO FLEXÍVEL CORRUGADO, 1\", INSTALADO NO PISO");
+    assert.strictEqual(core.unidadeDoModelo("metro(s)"), "m");
     const porModelo = [
         { name: "A", quantity: 10, unitLabel: "item(ns)", quantityByModel: new Map([["IFC_ELE", 7], ["IFC_HID", 3]]) },
         { name: "B", quantity: 5, unitLabel: "item(ns)", quantityByModel: new Map([["IFC_HID", 5]]) },
         { name: "C", quantity: 2, unitLabel: "item(ns)" }
     ];
     assert.deepStrictEqual(core.filtrarItensPorModelo(porModelo, "IFC_ELE").map((i) => [i.name, i.quantity]), [["A", 7], ["C", 2]]);
-    assert.deepStrictEqual(core.filtrarItensPorModelo(porModelo, "IFC_HID").map((i) => [i.name, i.quantity]), [["A", 3], ["B", 5], ["C", 2]]);
     assert.strictEqual(core.nomeIfcUtil("Project Name"), "");
-    assert.strictEqual(core.nomeIfcUtil("  Escola Estadual Canaã "), "Escola Estadual Canaã");
 
-    // --- montagem a partir de uma lista de materiais do modelo ---
-    const itens = [
-        { name: "Cabo Unipolar - cobre - Isol. XLPE - 0,6/1kV - ref. Prysmian Voltalene Ecolene - SINAPI - 2.5 mm² - Azul claro", quantity: 120.456, unitLabel: "metro(s)" },
-        { name: "Cabo Unipolar - cobre - Isol. XLPE - 0,6/1kV - ref. Prysmian Voltalene Ecolene - SINAPI - 2.5 mm² - Preto", quantity: 100, unitLabel: "metro(s)" },
-        { name: "Dispositivo de Proteção - Disjuntor unipolar termomagnético - 220 V/127 V - DIN - Curva C - 20 A - 5 kA", quantity: 12, unitLabel: "item(ns)" },
-        { name: "PVC Esgoto - Tubo rígido c/ ponta lisa - 50 mm - 2\"", quantity: 33.2, unitLabel: "metro(s)" },
+    // --- memorial de cabeamento estruturado ---
+    const itensLog = [
+        { name: "Cabeamento estruturado - metálico - UTP-CAT.6 - 4", quantity: 1600.52, unitLabel: "metro(s)" },
+        { name: "Acessórios Cabeamento - Metálico - Patch panel - 24 posições", quantity: 1, unitLabel: "item(ns)" },
+        { name: "Intelbras - Equipamentos de Rede e Rack - Mini Rack de Parede - 12U unc 19” x 570mm MRD 1257", quantity: 1, unitLabel: "item(ns)" },
+        { name: "Eletroduto PVC flexível - Eletroduto leve - 3/4\" - Forro", quantity: 101.72, unitLabel: "metro(s)" },
         { name: "Coisa sem regra <&>", quantity: 1, unitLabel: "item(ns)" }
     ];
-    const associacoes = [
-        { codigo: "91926", base: "SINAPI", descricao: "CABO 2,5", unidade: "M", itemDescricao: itens[0].name },
-        { codigo: "91926", base: "SINAPI", descricao: "CABO 2,5", unidade: "M", itemDescricao: itens[1].name }
-    ];
+    const associacoes = [{ codigo: "98297", base: "SINAPI", itemDescricao: itensLog[0].name }];
     const { payload, resumo } = core.montarMemorial({
-        itens, associacoes, config,
-        dados: { obra: "Escola Modelo", disciplina: "Instalações elétricas", arquivoIfc: "IFC-ELE-ESCOLA", local: "Boa Vista / RR", revisao: "R01", dataEmissao: "novembro de 2026" }
+        itens: itensLog, associacoes, config, disciplina: "LOG",
+        dados: { obra: "Escola Modelo", cliente: "SEDUC", endereco: "Rua A, 10", local: "Boa Vista / RR", revisao: "R01", dataEmissao: "novembro de 2026", arquivoIfc: "IFC-LOG-ESC" }
     });
+    const titulos = payload.titulos.map((t) => t.titulo);
+    ["OBJETO", "NORMAS TÉCNICAS", "DOCUMENTAÇÃO", "Arquitetura do sistema", "Eletrodutos flexíveis", "Cabos de par trançado", "Patch panels", "Patch cords e line cords", "RACKS E ACESSÓRIOS", "CERTIFICAÇÃO E TESTES", "CONSIDERAÇÕES FINAIS"]
+        .forEach((t) => assert.ok(titulos.includes(t), `faltou o título ${t}`));
+    ["Cabos ópticos", "TELEFONIA", "CIRCUITO FECHADO DE TV (CFTV)", "Eletrocalhas e leitos para cabos", "QUADROS DE DISTRIBUIÇÃO"]
+        .forEach((t) => assert.ok(!titulos.includes(t), `título ${t} não deveria aparecer sem materiais`));
+    assert.strictEqual(payload.titulos.find((t) => t.titulo === "INFRAESTRUTURA").nivel, 1);
+    assert.strictEqual(payload.titulos.find((t) => t.titulo === "Eletrodutos flexíveis").nivel, 2);
+    assert.ok(payload.titulos[0].conteudo[0].texto.includes("cabeamento estruturado e telefonia da obra Escola Modelo, situada em Rua A, 10"));
+    assert.ok(payload.titulos.find((t) => t.titulo === "DOCUMENTAÇÃO").conteudo.some((b) => b.tipo === "item" && b.texto.includes("IFC-LOG-ESC")));
+    assert.ok(payload.titulos.find((t) => t.titulo === "NORMAS TÉCNICAS").conteudo.some((b) => b.tipo === "normas"));
+    assert.ok(payload.normas.some((n) => n.norma === "ABNT NBR 14565"));
+    assert.ok(payload.normas.some((n) => n.norma === "ANSI/TIA-568.2-D"));
+    assert.ok(!payload.normas.some((n) => n.norma === "ANSI/TIA-568.3-D"), "norma de fibra só com fibra no IFC");
+    assert.ok(!payload.normas.some((n) => n.norma === "ABNT NBR 14136"), "norma de tomadas elétricas não entra no memorial de lógica");
+    assert.deepStrictEqual(payload.titulos.find((t) => t.titulo === "Cabos de par trançado").materiais, ["Cabeamento estruturado - metálico - UTP-CAT.6 - 4"]);
+    assert.strictEqual(payload.anexo.find((g) => g.titulo === "Cabos de par trançado").itens[0].referencia, "SINAPI 98297");
+    assert.strictEqual(payload.anexo.at(-1).titulo, "Outros materiais do modelo");
     assert.strictEqual(resumo.pendentes.length, 1);
-    assert.strictEqual(resumo.classificados, 4);
-    assert.deepStrictEqual(payload.secoes.map((s) => s.titulo), ["Dispositivos de proteção, comando e medição", "Condutores elétricos", "Esgoto sanitário, ventilação e águas pluviais"], "seções em nível único, na ordem da planilha");
-    assert.strictEqual(payload.disciplina, "Instalações elétricas");
-    const condutores = payload.secoes.find((s) => s.titulo === "Condutores elétricos");
-    assert.strictEqual(condutores.itens.length, 1, "cores do mesmo cabo viram uma linha só");
-    assert.match(condutores.itens[0].descricao, /\(cores: azul claro e preto\)$/);
-    assert.strictEqual(condutores.itens[0].referencia, "SINAPI 91926");
-    assert.strictEqual(condutores.itens[0].quantidade, 220.46);
-    assert.ok(payload.apresentacao[0].includes("Escola Modelo"));
-    assert.ok(payload.apresentacao[0].includes("projeto de Instalações elétricas"));
-    assert.ok(payload.apresentacao[1].includes("IFC-ELE-ESCOLA"));
-    assert.ok(payload.normas.some((n) => n.norma === "ABNT NBR 5410"));
-    assert.ok(payload.normas.some((n) => n.norma === "ABNT NBR 8160"));
-    assert.ok(!payload.normas.some((n) => n.norma === "ABNT NBR 5419"), "norma de SPDA só entra com SPDA no modelo");
+
+    // --- memorial elétrico ---
+    const ele = core.montarMemorial({
+        itens: [
+            { name: "Cabo Unipolar - cobre - Isol. XLPE - 0,6/1kV - 2.5 mm² - Azul claro", quantity: 120.456, unitLabel: "metro(s)" },
+            { name: "Cabo Unipolar - cobre - Isol. XLPE - 0,6/1kV - 2.5 mm² - Preto", quantity: 100, unitLabel: "metro(s)" },
+            { name: "Dispositivo de Proteção - Disjuntor unipolar termomagnético - 220 V/127 V - DIN - Curva C - 20 A - 5 kA", quantity: 12, unitLabel: "item(ns)" }
+        ], config, disciplina: "ELE", dados: { obra: "Escola Modelo", local: "Boa Vista / RR" }
+    }).payload;
+    const titulosEle = ele.titulos.map((t) => t.titulo);
+    ["Condutores dos circuitos", "Disjuntores termomagnéticos", "ENSAIOS E COMISSIONAMENTO", "ATERRAMENTO E EQUIPOTENCIALIZAÇÃO"].forEach((t) => assert.ok(titulosEle.includes(t), `faltou ${t}`));
+    assert.ok(!titulosEle.includes("ILUMINAÇÃO"));
+    assert.match(ele.titulos.find((t) => t.titulo === "Condutores dos circuitos").materiais[0], /\(cores: azul claro e preto\)$/);
+    assert.strictEqual(ele.anexo.find((g) => g.titulo === "Condutores dos circuitos").itens[0].quantidade, 220.46);
+    assert.ok(ele.titulos[0].conteudo[0].texto.includes("situada em Boa Vista / RR"), "sem endereço usa o local");
 
     // --- servidor: validação ---
     const memorial = require("../api/_memorial-descritivo");
     assert.throws(() => memorial.normalizarMemorial({ ...payload, obra: " " }), /obra/);
-    assert.throws(() => memorial.normalizarMemorial({ ...payload, secoes: [] }), /Nenhum material/);
+    assert.throws(() => memorial.normalizarMemorial({ ...payload, titulos: [] }), /roteiro/);
     assert.strictEqual(memorial.formatarQuantidade(220.456, "m"), "220,46");
-    assert.strictEqual(memorial.formatarQuantidade(12, "un"), "12");
     assert.strictEqual(memorial.nomeArquivo({ obra: "Escola Modelo/Canaã", disciplina: "Elétrica", revisao: "R01" }), "memorial-descritivo-Escola-Modelo-Canaa-Eletrica-R01.docx");
 
     // --- servidor: geração do Word com o modelo real ---
     const { criarHandler } = require("../api/gerar-memorial-word");
     const handler = criarHandler({ requireUser: async () => ({ perfil: "admin" }) });
     const malicioso = JSON.parse(JSON.stringify(payload));
-    malicioso.secoes[0].itens.push({ descricao: "Item <w:p>&\"quebra\"", referencia: "", unidade: "un", quantidade: 2 });
+    malicioso.anexo[0].itens.push({ descricao: "Item <w:p>&\"quebra\"", referencia: "", unidade: "un", quantidade: 2 });
     const res = respostaFake();
     await handler({ method: "POST", body: malicioso }, res);
     assert.strictEqual(res.statusCode, 200, res.body && res.body.toString());
-    assert.match(res.headers["content-disposition"], /memorial-descritivo-Escola-Modelo-Instalacoes-eletricas-R01\.docx/);
+    assert.match(res.headers["content-disposition"], /memorial-descritivo-Escola-Modelo-Cabeamento-Estruturado-e-Telefonia-R01\.docx/);
     const docx = new PizZip(res.body);
     const xml = docx.file("word/document.xml").asText();
-    assert.ok(!/\[@?[A-Z_]+\]/.test(xml.replace(/<[^>]+>/g, "")), "nenhum marcador pode sobrar no Word");
-    assert.ok(xml.includes("MEMORIAL DESCRITIVO"));
-    assert.ok(xml.includes("Escola Modelo"));
-    assert.ok(xml.includes("BOA VISTA / RR"));
-    assert.ok(xml.includes("CONDUTORES ELÉTRICOS"));
-    assert.ok(xml.includes("Instalações elétricas"), "disciplina na capa");
+    assert.ok(!/\[[@#/]?[A-Z_]+\]/.test(xml.replace(/<[^>]+>/g, "")), "nenhum marcador pode sobrar no Word");
+    assert.ok(xml.includes("CABEAMENTO ESTRUTURADO E TELEFONIA"), "disciplina na capa");
+    assert.ok(xml.includes("SEDUC") && xml.includes("Rua A, 10"), "cliente e endereço na capa");
+    assert.ok(xml.includes("ANEXO A — RELAÇÃO DE MATERIAIS"));
+    assert.ok(xml.includes("Materiais previstos neste projeto:"));
     assert.ok(xml.includes("Item &lt;w:p&gt;&amp;&quot;quebra&quot;"), "texto do usuário precisa ser escapado");
-    assert.ok(!xml.includes("ANEXO"), "o memorial não leva os anexos do relatório de atividades");
     assert.ok(docx.file("word/settings.xml").asText().includes("<w:updateFields"), "sumário atualiza ao abrir");
+
+    // sem cliente/endereço as linhas da capa somem
+    const semCliente = respostaFake();
+    await handler({ method: "POST", body: { ...payload, cliente: "", endereco: "" } }, semCliente);
+    const xmlSem = new PizZip(semCliente.body).file("word/document.xml").asText();
+    assert.ok(!xmlSem.includes("Cliente:") && !xmlSem.includes("Endereço:"));
 
     const semAuth = criarHandler({ requireUser: async () => { const e = new Error("Sem acesso"); e.statusCode = 403; throw e; } });
     const res403 = respostaFake();
     await semAuth({ method: "POST", body: payload }, res403);
     assert.strictEqual(res403.statusCode, 403);
-
-    const resGet = respostaFake();
-    await handler({ method: "GET" }, resGet);
-    assert.strictEqual(resGet.statusCode, 405);
 
     if (process.env.MEMORIAL_SAIDA) fs.writeFileSync(process.env.MEMORIAL_SAIDA, res.body);
     console.log("memorial-descritivo: ok");

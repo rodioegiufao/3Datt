@@ -5,7 +5,7 @@
 // gerado por /api/gerar-memorial-word no timbrado da empresa.
 
 import { loadAssociationDefinitionsFromExcel, loadWorkbookFromExcel } from "./excel-export.js";
-import { ABAS_OBRIGATORIAS, filtrarItensPorModelo, formatarDataEmissao, lerConfiguracao, montarMemorial, nomeIfcUtil, normalizarTexto } from "./memorial-core.js";
+import { ABAS_OBRIGATORIAS, detectarDisciplina, filtrarItensPorModelo, formatarDataEmissao, lerConfiguracao, montarMemorial, nomeIfcUtil, normalizarTexto } from "./memorial-core.js";
 
 const MEMORIAL_XLSX = "/3D/memorial_descritivo.xlsx";
 const BASE_XLSX = "./base_de_dados.xlsx";
@@ -32,10 +32,12 @@ export function lerInfoIfc(viewer, modelo) {
     const primeiroNome = (tipo) => metaObjetosDoTipo(viewer, tipo, modelo.id)
         .map((mo) => nomeIfcUtil(mo.name))
         .find((nome) => nome && !pareceCodigo(nome)) || "";
+    // O código do IFC (ex.: IFC-LOG-DRL) identifica melhor o arquivo do que o nome do .xkt convertido
+    const codigoIfc = metaObjetosDoTipo(viewer, "IfcProject", modelo.id).map((mo) => String(mo.name || "").trim()).find((nome) => /^(ifc|xkt)[-_ ]/i.test(nome)) || "";
     return {
         obra: primeiroNome("IfcProject") || primeiroNome("IfcBuilding") || primeiroNome("IfcSite"),
         disciplina: String(modelo.displayName || modelo.label || "").trim(),
-        arquivoIfc: arquivo
+        arquivoIfc: codigoIfc || arquivo
     };
 }
 
@@ -57,7 +59,7 @@ function injetarEstilo() {
 .memorial-dialog { width: min(560px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--ui-border, rgba(255,255,255,.08)); border-radius: 12px; background: var(--ui-surface-solid, #1a1c20); color: var(--ui-text, #eceef1); font: 13px var(--ui-font, system-ui, sans-serif); box-shadow: 0 20px 60px rgba(0,0,0,.5); }
 .memorial-dialog [hidden] { display: none !important; }
 .memorial-dialog::backdrop { background: rgba(0,0,0,.55); }
-.memorial-dialog form { display: grid; gap: 14px; padding: 20px; }
+.memorial-dialog form { display: grid; gap: 14px; padding: 20px; max-height: calc(100vh - 48px); overflow-y: auto; box-sizing: border-box; }
 .memorial-dialog h2 { margin: 0; font-size: 16px; }
 .memorial-dialog .memorial-sub { margin: -8px 0 0; opacity: .7; }
 .memorial-dialog .memorial-campos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -95,7 +97,9 @@ function criarDialogo() {
     <div class="memorial-campos">
         <label class="memorial-largo memorial-modelo">Modelo IFC<select name="modelo"></select></label>
         <label class="memorial-largo">Obra<input type="text" name="obra" maxlength="200" required autocomplete="off"></label>
-        <label class="memorial-largo">Disciplina<input type="text" name="disciplina" maxlength="200" autocomplete="off"></label>
+        <label class="memorial-largo">Disciplina (roteiro do memorial)<select name="disciplina"></select></label>
+        <label class="memorial-largo">Cliente<input type="text" name="cliente" maxlength="200" autocomplete="off" placeholder="opcional"></label>
+        <label class="memorial-largo">Endereço da obra<input type="text" name="endereco" maxlength="200" autocomplete="off" placeholder="opcional"></label>
         <label>Local<input type="text" name="local" maxlength="200" autocomplete="off"></label>
         <label>Revisão<input type="text" name="revisao" maxlength="30" autocomplete="off"></label>
         <label class="memorial-largo">Data de emissão<input type="text" name="dataEmissao" maxlength="60" autocomplete="off"></label>
@@ -120,7 +124,9 @@ function criarDialogo() {
 function lerFormulario(form) {
     return {
         obra: form.obra.value.trim(),
-        disciplina: form.disciplina.value.trim(),
+        disciplina: form.disciplina.value,
+        cliente: form.cliente.value.trim(),
+        endereco: form.endereco.value.trim(),
         local: form.local.value.trim(),
         revisao: form.revisao.value.trim(),
         dataEmissao: form.dataEmissao.value.trim(),
@@ -131,7 +137,9 @@ function lerFormulario(form) {
 
 function preencherFormulario(form, valores) {
     form.obra.value = valores.obra || "";
-    form.disciplina.value = valores.disciplina || "";
+    if (valores.disciplina) form.disciplina.value = valores.disciplina;
+    form.cliente.value = valores.cliente || "";
+    form.endereco.value = valores.endereco || "";
     form.local.value = valores.local || "";
     form.revisao.value = valores.revisao || "R00";
     form.dataEmissao.value = valores.dataEmissao || "";
@@ -141,11 +149,9 @@ function preencherFormulario(form, valores) {
 
 function renderizarResumo(el, resumo) {
     const caixa = el.querySelector(".memorial-resumo");
-    caixa.textContent = resumo.secoes
-        ? `${resumo.classificados} de ${resumo.materiais} materiais deste IFC entram no memorial, em ${resumo.secoes} seção(ões) (${resumo.linhas} linha(s) de especificação).`
-        : resumo.materiais
-            ? "Nenhum material deste IFC corresponde às regras da memorial_descritivo.xlsx."
-            : "Este IFC não tem materiais na lista. Gere a lista de materiais com ele carregado.";
+    caixa.textContent = resumo.materiais
+        ? `${resumo.materiais} materiais deste IFC: o memorial terá ${resumo.titulos} título(s) e ${resumo.linhas} linha(s) na relação de materiais (Anexo A).`
+        : "Este IFC não tem materiais na lista. Gere a lista de materiais com ele carregado.";
 
     const detalhes = el.querySelector(".memorial-pendentes");
     const lista = detalhes.querySelector("ul");
@@ -153,7 +159,7 @@ function renderizarResumo(el, resumo) {
     detalhes.hidden = !resumo.pendentes.length;
     if (!resumo.pendentes.length) return;
     detalhes.querySelector("summary").textContent =
-        `${resumo.pendentes.length} material(is) ficarão de fora — complete a aba Classificacao`;
+        `${resumo.pendentes.length} material(is) sem texto no memorial (vão só para o Anexo A)`;
     resumo.pendentes.slice(0, 300).forEach(({ nome, motivo }) => {
         const li = document.createElement("li");
         li.textContent = nome;
@@ -257,13 +263,23 @@ export async function abrirGeradorMemorial({ itens = [], modelos = [], viewer, n
         return !filtrados.length && modelos.length === 1 ? itens : filtrados;
     };
 
+    form.disciplina.innerHTML = "";
+    config.disciplinas.forEach((d) => {
+        const opcao = document.createElement("option");
+        opcao.value = d.codigo;
+        opcao.textContent = d.nome;
+        form.disciplina.appendChild(opcao);
+    });
+
     const preencherPeloIfc = () => {
         const modelo = modeloAtual();
         const salvo = formularioPorModelo.get(modelo.id);
         const ifc = lerInfoIfc(viewer, modelo);
+        const disciplina = detectarDisciplina({ ...modelo, arquivo: ifc.arquivoIfc }, config.disciplinas);
         preencherFormulario(form, salvo || {
             obra: ifc.obra || obraPadrao,
-            disciplina: ifc.disciplina,
+            disciplina: disciplina?.codigo,
+            cliente: config.geral.CLIENTE_PADRAO || "",
             local: config.geral.LOCAL_PADRAO || "",
             dataEmissao: formatarDataEmissao()
         });
@@ -277,6 +293,7 @@ export async function abrirGeradorMemorial({ itens = [], modelos = [], viewer, n
             associacoes,
             config,
             normalizarBusca,
+            disciplina: valores.disciplina,
             dados: { ...valores, arquivoIfc: form.dataset.arquivoIfc || "" },
             opcoes: { mostrarQuantidades: valores.mostrarQuantidades, mostrarReferencias: valores.mostrarReferencias }
         });
@@ -285,9 +302,10 @@ export async function abrirGeradorMemorial({ itens = [], modelos = [], viewer, n
     const atualizarResumo = () => {
         const { resumo } = calcular();
         renderizarResumo(dialogo, resumo);
-        botaoGerar.disabled = !resumo.secoes;
+        botaoGerar.disabled = !resumo.materiais;
     };
 
+    form.disciplina.onchange = () => atualizarResumo();
     form.modelo.onchange = () => {
         erro.textContent = "";
         preencherPeloIfc();

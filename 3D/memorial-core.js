@@ -1,13 +1,17 @@
 // memorial-core.js
-// Lógica pura do memorial descritivo (sem DOM): lê as regras da memorial_descritivo.xlsx,
-// classifica os materiais de UM modelo IFC e monta o JSON enviado para /api/gerar-memorial-word.
+// Lógica pura do memorial descritivo (sem DOM). Lê as regras da memorial_descritivo.xlsx,
+// identifica a disciplina do IFC, classifica os materiais e monta o roteiro do memorial
+// (títulos numerados, textos técnicos, normas e materiais) enviado para /api/gerar-memorial-word.
 
-export const ABAS_OBRIGATORIAS = ["Geral", "Secoes", "Classificacao", "Normas"];
+export const ABAS_OBRIGATORIAS = ["Geral", "Disciplinas", "Estrutura", "Classificacao", "Normas"];
 
 const CORES = new Set([
     "amarelo", "branco", "azul", "azul claro", "azul-claro", "preto", "vermelho", "verde",
     "verde-amarelo", "verde/amarelo", "verde e amarelo", "cinza", "marrom", "laranja", "violeta", "roxo"
 ]);
+
+const NOMES_GENERICOS = new Set(["", "project", "projeto", "project name", "project number", "default", "undefined",
+    "unnamed", "sem nome", "building", "edificio", "site", "terreno"]);
 
 export function normalizarTexto(valor) {
     return String(valor ?? "")
@@ -19,7 +23,7 @@ export function normalizarTexto(valor) {
 }
 
 function chaveColuna(nome) {
-    return normalizarTexto(nome).toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_|_$/g, "");
+    return normalizarTexto(nome).toUpperCase().replace(/[^A-Z0-9*]+/g, "_").replace(/^_|_$/g, "");
 }
 
 function normalizarLinhas(linhas) {
@@ -32,10 +36,13 @@ function normalizarLinhas(linhas) {
     });
 }
 
-function simNao(valor, padrao = true) {
-    const t = normalizarTexto(valor);
-    if (!t) return padrao;
-    return !["nao", "n", "false", "0", "no"].includes(t);
+function listaCodigos(valor) {
+    return String(valor ?? "").split(/[,;\n]/).map((g) => chaveColuna(g)).filter(Boolean);
+}
+
+function numero(valor, padrao) {
+    const n = Number(valor);
+    return String(valor ?? "").trim() !== "" && Number.isFinite(n) ? n : padrao;
 }
 
 export function lerConfiguracao(abas = {}) {
@@ -50,16 +57,26 @@ export function lerConfiguracao(abas = {}) {
         if (chave) geral[chave] = String(l.TEXTO ?? "");
     });
 
-    const secoes = normalizarLinhas(abas.Secoes)
+    const disciplinas = normalizarLinhas(abas.Disciplinas)
+        .map((l) => ({
+            codigo: chaveColuna(l.CODIGO),
+            nome: String(l.NOME ?? "").trim(),
+            estrutura: chaveColuna(l.ESTRUTURA) || chaveColuna(l.CODIGO),
+            identificar: String(l.IDENTIFICAR ?? "").split(/[,;\n]/).map((t) => normalizarTexto(t)).filter(Boolean)
+        }))
+        .filter((d) => d.codigo && d.nome);
+
+    const estrutura = normalizarLinhas(abas.Estrutura)
         .map((l, i) => ({
-            ordem: Number.isFinite(Number(l.ORDEM)) && String(l.ORDEM).trim() !== "" ? Number(l.ORDEM) : 10000 + i,
-            grupo: chaveColuna(l.GRUPO_MEMORIAL),
+            estruturas: listaCodigos(l.ESTRUTURAS),
+            ordem: numero(l.ORDEM, 100000 + i),
+            nivel: Math.min(3, Math.max(1, Math.round(numero(l.NIVEL, 1)))),
             titulo: String(l.TITULO ?? "").trim(),
             texto: String(l.TEXTO ?? ""),
-            listarItens: simNao(l.LISTAR_ITENS, true),
-            ativo: simNao(l.ATIVO, true)
+            mostrarSe: listaCodigos(l.MOSTRAR_SE),
+            listar: listaCodigos(l.LISTAR_ITENS)
         }))
-        .filter((s) => s.grupo && s.titulo);
+        .filter((l) => l.titulo && l.estruturas.length);
 
     const regras = normalizarLinhas(abas.Classificacao)
         .map((l) => ({
@@ -71,13 +88,14 @@ export function lerConfiguracao(abas = {}) {
 
     const normas = normalizarLinhas(abas.Normas)
         .map((l) => ({
+            estruturas: listaCodigos(l.ESTRUTURAS),
             norma: String(l.NORMA ?? "").trim(),
-            titulo: String(l.TITULO ?? "").trim(),
-            grupos: String(l.GRUPOS ?? "").split(/[,;\n]/).map((g) => chaveColuna(g.replace("*", "_ASTERISCO_"))).filter(Boolean)
+            descricao: String(l.DESCRICAO ?? "").trim(),
+            mostrarSe: listaCodigos(l.MOSTRAR_SE)
         }))
-        .filter((n) => n.norma);
+        .filter((n) => n.norma && n.estruturas.length);
 
-    return { geral, secoes, regras, normas };
+    return { geral, disciplinas, estrutura, regras, normas };
 }
 
 export function classificarMaterial(nome, regras) {
@@ -90,12 +108,37 @@ export function classificarMaterial(nome, regras) {
     return null;
 }
 
+/** Identifica a disciplina pelas siglas/palavras do nome do modelo (id, nome exibido e arquivo). */
+export function detectarDisciplina(modelo, disciplinas) {
+    const textos = [modelo?.id, modelo?.displayName, modelo?.label, modelo?.src, modelo?.arquivo].map(normalizarTexto).join(" ");
+    const tokens = new Set(textos.split(/[^a-z0-9]+/).filter(Boolean));
+    let melhor = null;
+    for (const d of disciplinas) {
+        const pontos = d.identificar.reduce((soma, termo) => {
+            if (!termo) return soma;
+            if (termo.includes(" ")) return soma + (textos.includes(termo) ? 2 : 0);
+            return soma + (tokens.has(termo) ? 3 : 0) + ([...tokens].some((t) => t.length > 4 && termo.length > 4 && t.startsWith(termo)) ? 1 : 0);
+        }, 0);
+        if (pontos > 0 && (!melhor || pontos > melhor.pontos)) melhor = { disciplina: d, pontos };
+    }
+    return melhor?.disciplina || disciplinas.find((d) => d.codigo === "GERAL") || disciplinas[0] || null;
+}
+
 export function separarCor(descricao) {
     const partes = String(descricao ?? "").split(" - ");
     if (partes.length < 2) return { base: String(descricao ?? "").trim(), cor: null };
     const ultima = partes[partes.length - 1].trim();
     if (!CORES.has(normalizarTexto(ultima))) return { base: String(descricao).trim(), cor: null };
     return { base: partes.slice(0, -1).join(" - ").trim(), cor: ultima };
+}
+
+/** Remove prefixos de origem ("- SINAPI - METROS - ", "- COMPOSIÇÃO PRÓPRIA - UNIDADES - ") da descrição. */
+export function limparDescricao(descricao) {
+    return String(descricao ?? "")
+        .replace(/^\s*-\s*(SINAPI|COMPOSI[CÇ][AÃ]O PR[OÓ]PRIA)\s*-\s*(METROS|UNIDADES|M2|M3|KG)\s*-\s*/i, "")
+        .replace(/\s*-\s*,\s*/g, ", ")
+        .replace(/\s+/g, " ")
+        .trim();
 }
 
 export function unidadeDoModelo(unitLabel) {
@@ -105,10 +148,7 @@ export function unidadeDoModelo(unitLabel) {
     return String(unitLabel ?? "").trim() || "un";
 }
 
-/**
- * Quantidades de um único IFC. Cada material consolidado guarda quantityByModel
- * (Map modelId -> quantidade); se a lista não tiver essa informação, usa o total.
- */
+/** Quantidades de um único IFC (cada material guarda quantityByModel: Map modelId -> quantidade). */
 export function filtrarItensPorModelo(itens, modeloId) {
     if (!modeloId) return [...itens];
     return itens
@@ -121,9 +161,6 @@ export function filtrarItensPorModelo(itens, modeloId) {
         .filter(Boolean);
 }
 
-const NOMES_GENERICOS = new Set(["", "project", "projeto", "project name", "project number", "default", "undefined", "unnamed", "sem nome", "building", "edificio", "site", "terreno"]);
-
-/** Nome útil de um IfcProject/IfcBuilding/IfcSite (descarta os nomes-padrão do Revit e afins). */
 export function nomeIfcUtil(valor) {
     const texto = String(valor ?? "").trim();
     return NOMES_GENERICOS.has(normalizarTexto(texto)) ? "" : texto;
@@ -138,35 +175,44 @@ function aplicarCampos(texto, campos) {
     return String(texto ?? "").replace(/\{([A-Z_]+)\}/g, (inteiro, nome) => (nome in campos ? campos[nome] : inteiro));
 }
 
-function paragrafos(texto, campos) {
-    return aplicarCampos(texto, campos).split(/\n+/).map((p) => p.trim()).filter(Boolean);
+function grupoBate(filtro, grupo) {
+    return filtro.endsWith("*") ? grupo.startsWith(filtro.slice(0, -1)) : filtro === grupo;
 }
 
-function normaSeAplica(norma, gruposPresentes) {
-    if (!norma.grupos.length) return true;
-    return norma.grupos.some((g) => {
-        if (g.endsWith("_ASTERISCO")) {
-            const prefixo = g.replace(/ASTERISCO$/, "");
-            return [...gruposPresentes].some((p) => p.startsWith(prefixo));
-        }
-        return gruposPresentes.has(g);
-    });
+function condicaoAtendida(mostrarSe, gruposPresentes) {
+    if (!mostrarSe.length) return true;
+    return mostrarSe.some((f) => [...gruposPresentes].some((g) => grupoBate(f, g)));
 }
 
 const comparar = (a, b) => a.localeCompare(b, "pt-BR", { numeric: true, sensitivity: "base" });
 
+/** Converte o TEXTO da planilha em parágrafos/marcadores; {NORMAS} marca o ponto da lista de normas. */
+function converterTexto(texto, campos) {
+    const blocos = [];
+    aplicarCampos(texto, campos).split(/\n+/).map((l) => l.trim()).filter(Boolean).forEach((linha) => {
+        if (linha === "{NORMAS}") blocos.push({ tipo: "normas" });
+        else if (/^[-•–]\s+/.test(linha)) blocos.push({ tipo: "item", texto: linha.replace(/^[-•–]\s+/, "") });
+        else blocos.push({ tipo: "paragrafo", texto: linha });
+    });
+    return blocos;
+}
+
 /**
  * @param {object} args
- * @param {Array<{name:string, quantity:number, unitLabel:string}>} args.itens  materiais de UM IFC (ver filtrarItensPorModelo)
- * @param {Array<{codigo,base,descricao,unidade,itemDescricao}>} args.associacoes  base_de_dados.xlsx
+ * @param {Array<{name, quantity, unitLabel}>} args.itens  materiais de UM IFC (ver filtrarItensPorModelo)
+ * @param {Array} args.associacoes  base_de_dados.xlsx (codigo, base, itemDescricao)
  * @param {ReturnType<typeof lerConfiguracao>} args.config
- * @param {{obra,local,revisao,dataEmissao,disciplina,arquivoIfc}} args.dados
+ * @param {string} args.disciplina  código da aba Disciplinas (ELE, LOG...)
+ * @param {{obra,cliente,endereco,local,revisao,dataEmissao,arquivoIfc}} args.dados
  * @param {{mostrarQuantidades?:boolean, mostrarReferencias?:boolean}} args.opcoes
- * @param {(s:string)=>string} [args.normalizarBusca]  mesma normalização usada no Excel de orçamento
  */
-export function montarMemorial({ itens = [], associacoes = [], config, dados = {}, opcoes = {}, normalizarBusca } = {}) {
+export function montarMemorial({ itens = [], associacoes = [], config, disciplina, dados = {}, opcoes = {}, normalizarBusca } = {}) {
     if (!config) throw new Error("Configuração do memorial não carregada.");
     const normBusca = typeof normalizarBusca === "function" ? normalizarBusca : normalizarTexto;
+    const disc = config.disciplinas.find((d) => d.codigo === chaveColuna(disciplina))
+        || config.disciplinas.find((d) => d.codigo === "GERAL") || config.disciplinas[0];
+    if (!disc) throw new Error("A aba Disciplinas está vazia.");
+    const roteiro = disc.estrutura;
 
     const assocPorItem = new Map();
     associacoes.forEach((a) => {
@@ -174,86 +220,103 @@ export function montarMemorial({ itens = [], associacoes = [], config, dados = {
         if (chave && !assocPorItem.has(chave)) assocPorItem.set(chave, a);
     });
 
-    const secoesAtivas = new Map();
-    config.secoes.filter((s) => s.ativo).forEach((s) => {
-        if (!secoesAtivas.has(s.grupo)) secoesAtivas.set(s.grupo, s);
-    });
-
-    const pendentes = [];
-    const porGrupo = new Map(); // grupo -> Map(chaveItem -> item agregado)
-
+    // ---- agrega os materiais do IFC por grupo (juntando cores do mesmo cabo) ----
+    const porGrupo = new Map();
+    const semRegra = [];
     itens.forEach((item) => {
         const nome = String(item?.name ?? "").trim();
         if (!nome) return;
-        const grupo = classificarMaterial(nome, config.regras);
-        if (!grupo) {
-            pendentes.push({ nome, motivo: "sem regra na aba Classificacao" });
-            return;
-        }
-        if (!secoesAtivas.has(grupo)) {
-            pendentes.push({ nome, motivo: `grupo ${grupo} sem seção ativa na aba Secoes` });
-            return;
-        }
-
+        const grupo = classificarMaterial(nome, config.regras) || "SEM_GRUPO";
+        if (grupo === "SEM_GRUPO") semRegra.push(nome);
         const assoc = assocPorItem.get(normBusca(nome));
-        const referencia = assoc?.codigo ? `${assoc.base ? `${assoc.base} ` : ""}${assoc.codigo}` : "";
         const unidade = unidadeDoModelo(item.unitLabel);
-        const quantidade = Number.isFinite(item.quantity) ? item.quantity : 0;
-        const { base, cor } = separarCor(nome);
+        const { base, cor } = separarCor(limparDescricao(nome));
         const chave = `${normalizarTexto(base)}|${unidade}`;
-
         if (!porGrupo.has(grupo)) porGrupo.set(grupo, new Map());
         const mapa = porGrupo.get(grupo);
         const atual = mapa.get(chave) || { base, cores: new Set(), referencias: new Set(), unidade, quantidade: 0 };
-        atual.quantidade += quantidade;
+        atual.quantidade += Number.isFinite(item.quantity) ? item.quantity : 0;
         if (cor) atual.cores.add(cor);
-        if (referencia) atual.referencias.add(referencia);
+        if (assoc?.codigo) atual.referencias.add(`${assoc.base ? `${assoc.base} ` : ""}${assoc.codigo}`);
         mapa.set(chave, atual);
     });
 
-    const gruposPresentes = new Set(porGrupo.keys());
+    const linhasDoGrupo = (grupo) => [...(porGrupo.get(grupo)?.values() || [])]
+        .map((i) => {
+            const cores = [...i.cores].sort(comparar).map((c) => c.toLocaleLowerCase("pt-BR"));
+            return {
+                descricao: cores.length ? `${i.base} (cores: ${juntarLista(cores)})` : i.base,
+                referencia: [...i.referencias].sort(comparar).join(" / "),
+                unidade: i.unidade,
+                quantidade: Math.round(i.quantidade * 100) / 100
+            };
+        })
+        .sort((a, b) => comparar(a.descricao, b.descricao));
+
+    const gruposPresentes = new Set([...porGrupo.keys()].filter((g) => g !== "SEM_GRUPO"));
     const campos = {
         OBRA: String(dados.obra ?? "").trim(),
+        CLIENTE: String(dados.cliente ?? "").trim(),
         LOCAL: String(dados.local ?? "").trim(),
+        ENDERECO: String(dados.endereco ?? "").trim(),
         REVISAO: String(dados.revisao ?? "").trim(),
-        DISCIPLINA: String(dados.disciplina ?? "").trim() || "instalações",
-        ARQUIVO_IFC: String(dados.arquivoIfc ?? "").trim()
+        ARQUIVO_IFC: String(dados.arquivoIfc ?? "").trim() || "do projeto",
+        DISCIPLINA: disc.nome,
+        DISCIPLINA_TEXTO: disc.nome.toLocaleLowerCase("pt-BR")
     };
-    campos.DISCIPLINAS = campos.DISCIPLINA; // compatibilidade com textos antigos
+    campos.ONDE = campos.ENDERECO || campos.LOCAL || "local indicado em projeto";
+    campos.DISCIPLINAS = campos.DISCIPLINA;
 
-    let totalLinhas = 0;
-    const secoesPayload = [...secoesAtivas.values()]
-        .filter((s) => gruposPresentes.has(s.grupo))
-        .sort((a, b) => a.ordem - b.ordem)
-        .map((s) => {
-            const itensSecao = s.listarItens
-                ? [...porGrupo.get(s.grupo).values()]
-                    .map((i) => {
-                        const cores = [...i.cores].sort(comparar);
-                        return {
-                            descricao: cores.length ? `${i.base} (cores: ${juntarLista(cores.map((c) => c.toLocaleLowerCase("pt-BR")))})` : i.base,
-                            referencia: [...i.referencias].sort(comparar).join(" / "),
-                            unidade: i.unidade,
-                            quantidade: Math.round(i.quantidade * 100) / 100
-                        };
-                    })
-                    .sort((a, b) => comparar(a.descricao, b.descricao))
-                : [];
-            totalLinhas += itensSecao.length;
-            return { titulo: s.titulo, paragrafos: paragrafos(s.texto, campos), itens: itensSecao };
+    const normas = config.normas
+        .filter((n) => n.estruturas.includes(roteiro) && condicaoAtendida(n.mostrarSe, gruposPresentes))
+        .map((n) => ({ norma: n.norma, descricao: n.descricao }))
+        .filter((n, i, lista) => lista.findIndex((m) => normalizarTexto(m.norma) === normalizarTexto(n.norma)) === i);
+
+    // ---- roteiro: só as linhas desta estrutura cuja condição foi atendida ----
+    const linhas = config.estrutura
+        .filter((l) => l.estruturas.includes(roteiro) && condicaoAtendida(l.mostrarSe, gruposPresentes))
+        .sort((a, b) => a.ordem - b.ordem);
+
+    // um subtítulo não pode ficar mais de um nível abaixo do anterior (ex.: 2 sem 1 antes)
+    let nivelAnterior = 0;
+    const gruposListados = new Set();
+    const anexo = [];
+    const titulos = linhas.map((l) => {
+        const nivel = Math.min(l.nivel, nivelAnterior + 1);
+        nivelAnterior = nivel;
+        const materiais = [];
+        l.listar.forEach((filtro) => {
+            [...gruposPresentes].filter((g) => grupoBate(filtro, g) && !gruposListados.has(g)).sort().forEach((g) => {
+                gruposListados.add(g);
+                materiais.push(...linhasDoGrupo(g));
+            });
         });
+        if (materiais.length) anexo.push({ titulo: l.titulo, itens: materiais });
+        const conteudo = converterTexto(l.texto, campos);
+        return { nivel, titulo: l.titulo, conteudo, materiais: materiais.map((m) => m.descricao) };
+    });
+
+    // materiais que não couberam em nenhum título do roteiro vão só para o anexo
+    const foraDoRoteiro = [...gruposPresentes].filter((g) => !gruposListados.has(g)).sort();
+    const outros = [...foraDoRoteiro, ...(porGrupo.has("SEM_GRUPO") ? ["SEM_GRUPO"] : [])].flatMap(linhasDoGrupo);
+    if (outros.length) anexo.push({ titulo: "Outros materiais do modelo", itens: outros });
+
+    const pendentes = [
+        ...semRegra.map((nome) => ({ nome, motivo: "sem regra na aba Classificacao" })),
+        ...foraDoRoteiro.flatMap((g) => linhasDoGrupo(g).map((i) => ({ nome: i.descricao, motivo: `grupo ${g} sem título no roteiro ${roteiro}` })))
+    ];
 
     const payload = {
         obra: campos.OBRA,
+        cliente: campos.CLIENTE,
+        endereco: campos.ENDERECO,
         local: campos.LOCAL,
         revisao: campos.REVISAO,
-        disciplina: String(dados.disciplina ?? "").trim(),
         dataEmissao: String(dados.dataEmissao ?? "").trim(),
-        apresentacao: paragrafos(config.geral.APRESENTACAO, campos),
-        disposicoesGerais: paragrafos(config.geral.DISPOSICOES_GERAIS, campos),
-        consideracoesFinais: paragrafos(config.geral.CONSIDERACOES_FINAIS, campos),
-        normas: config.normas.filter((n) => normaSeAplica(n, gruposPresentes)).map(({ norma, titulo }) => ({ norma, titulo })),
-        secoes: secoesPayload,
+        disciplina: disc.nome,
+        titulos,
+        normas,
+        anexo,
         opcoes: {
             mostrarQuantidades: opcoes.mostrarQuantidades !== false,
             mostrarReferencias: opcoes.mostrarReferencias !== false
@@ -263,10 +326,10 @@ export function montarMemorial({ itens = [], associacoes = [], config, dados = {
     return {
         payload,
         resumo: {
+            disciplina: disc.codigo,
             materiais: itens.length,
-            classificados: itens.length - pendentes.length,
-            secoes: secoesPayload.length,
-            linhas: totalLinhas,
+            titulos: titulos.length,
+            linhas: anexo.reduce((s, g) => s + g.itens.length, 0),
             pendentes
         }
     };
