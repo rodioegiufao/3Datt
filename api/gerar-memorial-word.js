@@ -7,18 +7,28 @@ const Docxtemplater = require("docxtemplater");
 const { parseRequestBody, requireInternalUser, sendJson } = require("./_auth");
 const { montarValores, nomeArquivo, normalizarMemorial, prepararTemplate } = require("./_memorial-descritivo");
 
-const TEMPLATE_PATH = path.join(process.cwd(), "memorial", "template", "Memorial-Descritivo.docx");
+// Caminho relativo a este arquivo: o Vercel rastreia esse require estático e empacota o .docx
+// junto com a função. O process.cwd() fica como reserva para rodar local.
+const TEMPLATE_PATHS = [
+  path.join(__dirname, "..", "memorial", "template", "Memorial-Descritivo.docx"),
+  path.join(process.cwd(), "memorial", "template", "Memorial-Descritivo.docx")
+];
+
+function localizarTemplate() {
+  return TEMPLATE_PATHS.find((caminho) => fs.existsSync(caminho)) || null;
+}
 
 function criarHandler(dependencias = {}) {
   const autenticar = dependencias.requireUser || requireInternalUser;
-  const templatePath = dependencias.templatePath || TEMPLATE_PATH;
 
   return async function gerarMemorialWordHandler(req, res) {
     try {
       if (req.method !== "POST") return sendJson(res, 405, { error: "Método não suportado." });
       await autenticar(req);
-      if (!fs.existsSync(templatePath)) {
-        return sendJson(res, 404, { error: "Modelo Memorial-Descritivo.docx não encontrado em /memorial/template." });
+      const templatePath = dependencias.templatePath || localizarTemplate();
+      if (!templatePath || !fs.existsSync(templatePath)) {
+        console.error("[memorial] Modelo não encontrado. Procurado em:", TEMPLATE_PATHS);
+        return sendJson(res, 404, { error: "Modelo Memorial-Descritivo.docx não foi incluído no deploy (memorial/template). Confira o includeFiles no vercel.json." });
       }
 
       const memorial = normalizarMemorial(parseRequestBody(req));
