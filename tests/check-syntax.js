@@ -29,6 +29,8 @@ const arquivos = [
   "api/_relatorio-obra.js",
   "api/gerar-relatorio-obra-word.js",
   "api/gerar-memorando-word.js",
+  "api/_memorial-descritivo.js",
+  "api/gerar-memorial-word.js",
   "api/ifc-to-xkt.js",
   "api/ifc-storage-upload-url.js",
   "api/supabase-public-config.js",
