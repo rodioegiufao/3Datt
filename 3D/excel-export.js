@@ -252,7 +252,7 @@ function pickHeader(rowObj, headerNames) {
     return undefined;
 }
 
-async function loadWorkbookFromExcel(excelPath) {
+export async function loadWorkbookFromExcel(excelPath) {
     if (workbookLoadPromises.has(excelPath)) {
         return workbookLoadPromises.get(excelPath);
     }
