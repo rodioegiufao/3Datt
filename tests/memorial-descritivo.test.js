@@ -67,7 +67,7 @@ function respostaFake() {
 
     // --- planilha de regras ---
     assert.ok(config.regras.length > 80, "a aba Classificacao deve ter as regras iniciais");
-    ["ELE", "ALIM", "LOG", "CFTV", "SDAI", "SPDA", "FV", "GERAL"].forEach((c) => assert.ok(config.disciplinas.some((d) => d.codigo === c), `falta a disciplina ${c}`));
+    ["ELE", "ALIM", "ILE", "LOG", "CFTV", "SOM", "SDAI", "SPDA", "FV", "GERAL"].forEach((c) => assert.ok(config.disciplinas.some((d) => d.codigo === c), `falta a disciplina ${c}`));
     assert.ok(config.atributos.length > 30, "a aba Atributos deve ter os atributos iniciais");
     const roteiros = new Set(config.disciplinas.map((d) => d.estrutura));
     roteiros.forEach((r) => assert.ok(config.estrutura.some((l) => l.estruturas.includes(r)), `roteiro ${r} sem linhas na aba Estrutura`));
@@ -95,7 +95,7 @@ function respostaFake() {
     assert.strictEqual(grupo("Aterramento - Barramento de equipotencialização - 11 terminais"), "ELE_ATERRAMENTO");
     assert.strictEqual(grupo("Acessórios Cabeamento - Metálico - Plugue - RJ45 - CM8v - Cat 6"), "LOG_CONECTORES");
     assert.strictEqual(grupo("Acessórios Cabeamento - Rack - Calha de tomadas - 10 tomadas 2P+T, 10A - 1U"), "LOG_RACK");
-    assert.strictEqual(grupo("Acessórios Cabeamento - Metálico - Patch panel XLR - 24 posições"), "SOM");
+    assert.strictEqual(grupo("Acessórios Cabeamento - Metálico - Patch panel XLR - 24 posições"), "SOM_CONEXOES");
     assert.strictEqual(grupo("Dispositivo Elétrico - embutido - Placa 4x4\" - Placa cega"), "INF_CAIXAS");
     assert.strictEqual(grupo("Acessórios uso geral - Arruela lisa galvan. - 1/4\""), "INF_FIXACAO");
     assert.strictEqual(grupo("Material inventado - xyz"), null);
@@ -110,6 +110,10 @@ function respostaFake() {
     assert.strictEqual(disc({ id: "IFC_SPDA", displayName: "SPDA" }), "SPDA");
     assert.strictEqual(disc({ id: "IFC_FV", displayName: "Sistema fotovoltaico" }), "FV");
     assert.strictEqual(disc({ id: "IFC_ALIM", displayName: "Alimentadores" }), "ALIM");
+    assert.strictEqual(disc({ id: "x", arquivo: "lista-iluminacao_externa-TCE" }), "ILE");
+    assert.strictEqual(disc({ id: "IFC_ILU_EXT" }), "ILE", "em empate com a elétrica, iluminação externa ganha");
+    assert.strictEqual(disc({ id: "IFC_ILU" }), "ELE");
+    assert.strictEqual(disc({ id: "x", arquivo: "IFC-SONORIZACAO-TCE" }), "SOM");
 
     // --- utilitários ---
     assert.deepStrictEqual(core.separarCor("Cabo - X - 2.5 mm² - Azul claro"), { base: "Cabo - X - 2.5 mm²", cor: "Azul claro" });
@@ -252,6 +256,38 @@ function respostaFake() {
     assert.ok(!fv.titulos[0].conteudo[0].texto.includes("inversores"), "sem inversor no IFC a frase dos inversores some");
     assert.ok(fv.titulos.some((t) => t.titulo === "COMISSIONAMENTO"));
     assert.ok(fv.normas.some((n) => n.norma === "ABNT NBR 16274"));
+
+    // --- sonorização ---
+    const som = core.montarMemorial({
+        itens: [
+            { name: "Cabeamento de sonorização - Cabo para Caixa Acústica- 12 AWG - 2 x 2,5mm - 1", quantity: 320, unitLabel: "metro(s)" },
+            { name: "Dispositivo TV/Som - Caixas de Som - Caixa de som para parede 40W", quantity: 12, unitLabel: "item(ns)" },
+            { name: "Acessórios Cabeamento - Metálico - Amplificador de áudio profissional - 400W", quantity: 2, unitLabel: "item(ns)" }
+        ], config, disciplina: "SOM", dados: { obra: "Escola" }
+    }).payload;
+    ["EQUIPAMENTOS DO SISTEMA", "Amplificação e processamento", "Caixas acústicas", "CABEAMENTO DO SISTEMA", "AJUSTES E COMISSIONAMENTO"].forEach((t) => assert.ok(som.titulos.some((x) => x.titulo === t), `SOM sem ${t}`));
+    assert.match(textoDe(som, "Caixas acústicas"), /12 caixas acústicas do tipo caixa de som para parede de 40 W/);
+    assert.match(textoDe(som, "Amplificação e processamento"), /amplificadores de 400 W\./);
+    assert.match(textoDe(som, "CABEAMENTO DO SISTEMA"), /cabos para caixa acústica \(12 AWG, 2 x 2,5 mm²\), totalizando 320 m\./);
+    assert.ok(som.normas.some((n) => n.norma === "ABNT NBR 10152"));
+
+    // --- iluminação externa ---
+    const ile = core.montarMemorial({
+        itens: [
+            { name: "Poste - Cônico em Aço Galvanizado - 9 metros", quantity: 8, unitLabel: "item(ns)" },
+            { name: "Poste - Suporte - Suporte para 4 lumináriais tipo pétala", quantity: 4, unitLabel: "item(ns)" },
+            { name: "Lâmpadas Led - Luminária Pública - Lâmpada 150W", quantity: 20, unitLabel: "item(ns)" },
+            { name: "Lâmpadas Led - Spot de embutir no chão - 12W", quantity: 47, unitLabel: "item(ns)" },
+            { name: "Dispositivo de Comando - Relé fotoelétrico - 220V - 1000W c/ fotocélula", quantity: 8, unitLabel: "item(ns)" }
+        ], config, disciplina: "ILE", dados: { obra: "Escola" }
+    }).payload;
+    ["POSTES E SUPORTES", "LUMINÁRIAS E PROJETORES", "ILUMINAÇÃO DE PISO E JARDINS", "COMANDO E PROTEÇÃO", "ENSAIOS E MEDIÇÕES"].forEach((t) => assert.ok(ile.titulos.some((x) => x.titulo === t), `ILE sem ${t}`));
+    assert.match(textoDe(ile, "POSTES E SUPORTES"), /8 postes do tipo cônico em aço galvanizado de 9 m\./, "suporte não conta como poste");
+    assert.match(textoDe(ile, "LUMINÁRIAS E PROJETORES"), /20 luminárias\/projetores, com potências de 150 W\./);
+    assert.match(textoDe(ile, "ILUMINAÇÃO DE PISO E JARDINS"), /47 luminárias de piso do tipo spot de embutir no chão de 12 W\./);
+    assert.match(textoDe(ile, "COMANDO E PROTEÇÃO"), /relés fotoelétricos de 220 V, 1 kW\./);
+    assert.ok(ile.normas.some((n) => n.norma === "ABNT NBR 5101"));
+    assert.ok(!ile.titulos.some((t) => t.titulo === "LUMINÁRIAS DE ÁREAS COBERTAS"), "sem herméticas no IFC, o capítulo não aparece");
 
     // --- servidor: validação ---
     const memorial = require("../api/_memorial-descritivo");

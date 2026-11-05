@@ -127,7 +127,7 @@ function limparValorAtributo(valor) {
         .replace(/(\d+)\.(\d+\/\d+)"/g, "$1 $2\"")           // 1.1/2" -> 1 1/2"
         .replace(/\b(\d+)\.(\d+)\b(?![\/\d])/g, "$1,$2") // 2.5 -> 2,5
         .replace(/\(\s*\)/g, "")
-        .replace(/(\d)(mm²|mm|cm|kV|kA|Wp)(?![\wÀ-ú])/g, "$1 $2")
+        .replace(/(\d)(mm²|mm|cm|kV|kA|Wp|V|A|W)(?![\wÀ-ú])/g, "$1 $2")
         .replace(/\b(\d{4,})\s*W\b/g, (_, w) => `${formatarNumero(Number(w) / 1000)} kW`)
         .replace(/\s+/g, " ")
         .replace(/\s+([,.)])/g, "$1")
