@@ -204,7 +204,7 @@ function montarValores(memorial) {
 
     const materiais = t.materiais.length
       ? `<w:p><w:pPr><w:keepNext/><w:spacing w:before="60" w:after="60"/><w:ind w:firstLine="0"/></w:pPr>${run("Materiais previstos neste projeto:", true)}</w:p>`
-        + t.materiais.map((m) => marcadorXml(`<w:r><w:rPr><w:sz w:val="20"/><w:szCs w:val="20"/></w:rPr><w:t xml:space="preserve">${textoSeguro(m)}</w:t></w:r>`, { depois: 20 })).join("")
+        + t.materiais.map((m) => marcadorXml(run(m), { depois: 40 })).join("")
         + criarEspacoAposTabelaXml(8)
       : "";
     return tituloXml(t.nivel, t.titulo) + blocos + materiais;

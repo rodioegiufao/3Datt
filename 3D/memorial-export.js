@@ -5,7 +5,7 @@
 // gerado por /api/gerar-memorial-word no timbrado da empresa.
 
 import { loadAssociationDefinitionsFromExcel, loadWorkbookFromExcel } from "./excel-export.js";
-import { ABAS_OBRIGATORIAS, detectarDisciplina, filtrarItensPorModelo, formatarDataEmissao, lerConfiguracao, montarMemorial, nomeIfcUtil, normalizarTexto } from "./memorial-core.js";
+import { ABAS_OBRIGATORIAS, ABAS_OPCIONAIS, detectarDisciplina, filtrarItensPorModelo, formatarDataEmissao, lerConfiguracao, montarMemorial, nomeIfcUtil, normalizarTexto } from "./memorial-core.js";
 
 const MEMORIAL_XLSX = "/3D/memorial_descritivo.xlsx";
 const BASE_XLSX = "./base_de_dados.xlsx";
@@ -44,7 +44,7 @@ export function lerInfoIfc(viewer, modelo) {
 async function carregarConfiguracao() {
     const workbook = await loadWorkbookFromExcel(MEMORIAL_XLSX);
     const abas = {};
-    ABAS_OBRIGATORIAS.forEach((nome) => {
+    [...ABAS_OBRIGATORIAS, ...ABAS_OPCIONAIS].forEach((nome) => {
         const sheet = workbook.Sheets[nome];
         if (sheet) abas[nome] = window.XLSX.utils.sheet_to_json(sheet, { defval: "" });
     });

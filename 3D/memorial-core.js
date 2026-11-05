@@ -4,6 +4,7 @@
 // (títulos numerados, textos técnicos, normas e materiais) enviado para /api/gerar-memorial-word.
 
 export const ABAS_OBRIGATORIAS = ["Geral", "Disciplinas", "Estrutura", "Classificacao", "Normas"];
+export const ABAS_OPCIONAIS = ["Atributos"];
 
 const CORES = new Set([
     "amarelo", "branco", "azul", "azul claro", "azul-claro", "preto", "vermelho", "verde",
@@ -95,7 +96,112 @@ export function lerConfiguracao(abas = {}) {
         }))
         .filter((n) => n.norma && n.estruturas.length);
 
-    return { geral, disciplinas, estrutura, regras, normas };
+    // Atributos (aba opcional): características lidas dos nomes dos materiais, usadas nos textos como {NOME}
+    const atributos = normalizarLinhas(abas.Atributos)
+        .map((l) => {
+            let regex = null;
+            try { regex = new RegExp(String(l.PADRAO ?? ""), "i"); } catch (_) { regex = null; }
+            return {
+                nome: chaveColuna(l.NOME),
+                grupos: listaCodigos(l.GRUPOS),
+                regex,
+                formato: String(l.FORMATO ?? "").trim() || "$1",
+                modo: chaveColuna(l.MODO) || "LISTA",
+                // a planilha corta espaços: " m" vira "m"; recoloca o espaço antes de unidades
+                sufixo: (() => { const s = String(l.SUFIXO ?? "").trim(); return s && !/^[,.;:)]/.test(s) ? ` ${s}` : s; })(),
+                fator: numero(l.FATOR, 1)
+            };
+        })
+        .filter((a) => a.nome && a.regex && String(a.regex.source) !== "(?:)");
+
+    return { geral, disciplinas, estrutura, regras, normas, atributos };
+}
+
+const formatarNumero = (n, casas = 2) => n.toLocaleString("pt-BR", { maximumFractionDigits: casas });
+const paraNumero = (texto) => Number(String(texto).replace(",", "."));
+
+function limparValorAtributo(valor) {
+    return String(valor ?? "")
+        .replace(/\(\s*[^)]*?\s*\$\d+\s*\)/g, "")   // grupo vazio entre parênteses
+        .replace(/\s+-\s+/g, ", ")
+        .replace(/(\d+)\.(\d+\/\d+)"/g, "$1 $2\"")           // 1.1/2" -> 1 1/2"
+        .replace(/\b(\d+)\.(\d+)\b(?![\/\d])/g, "$1,$2") // 2.5 -> 2,5
+        .replace(/\(\s*\)/g, "")
+        .replace(/(\d)(mm²|mm|cm|kV|kA|Wp)(?![\wÀ-ú])/g, "$1 $2")
+        .replace(/\b(\d{4,})\s*W\b/g, (_, w) => `${formatarNumero(Number(w) / 1000)} kW`)
+        .replace(/\s+/g, " ")
+        .replace(/\s+([,.)])/g, "$1")
+        .replace(/\bfranklin\b/g, "Franklin")
+        .trim();
+}
+
+/** "3/4\"" -> 0,75; "1 1/2\"" -> 1,5; "2,5" -> 2,5; "100x100 mm (chapa 18)" -> 100. Outros textos -> NaN. */
+function valorNumerico(valor) {
+    const v = String(valor).trim();
+    let m = v.match(/^(\d+)(?:\s+(\d+)\/(\d+))?"$/);
+    if (m) return Number(m[1]) + (m[2] ? Number(m[2]) / Number(m[3]) : 0);
+    m = v.match(/^(\d+)\/(\d+)"$/);
+    if (m) return Number(m[1]) / Number(m[2]);
+    m = v.match(/^(\d+)x(\d+)/);
+    if (m) return Number(m[1]) * 10000 + Number(m[2]);
+    m = v.match(/^\d+(?:,\d+)?$/);
+    if (m) return Number(v.replace(",", "."));
+    return NaN;
+}
+
+/** Calcula os atributos (características dos materiais) a partir dos itens do IFC já classificados. */
+export function calcularAtributos(atributos = [], itensClassificados = []) {
+    const valores = {};
+    const porNome = new Map();
+    atributos.forEach((a) => {
+        if (!porNome.has(a.nome)) porNome.set(a.nome, []);
+        porNome.get(a.nome).push(a);
+    });
+    porNome.forEach((linhas, nome) => {
+        const lista = [];
+        let total = 0;
+        let achou = false;
+        const sufixo = linhas[0].sufixo;
+        const modo = linhas[0].modo;
+        linhas.forEach((a) => {
+            itensClassificados.filter((i) => a.grupos.some((f) => grupoBate(f, i.grupo))).forEach((item) => {
+                const m = item.nome.match(a.regex);
+                if (!m) return;
+                achou = true;
+                if (modo === "CONTAGEM") { total += item.quantidade; return; }
+                if (modo === "SOMA") { total += item.quantidade * paraNumero(m[1]) * a.fator; return; }
+                const bruto = a.formato.replace(/\$(L?)(\d)/g, (_, minusculo, n) => {
+                    const v = m[Number(n)];
+                    if (v === undefined) return `$${n}`;
+                    return minusculo ? v.toLocaleLowerCase("pt-BR") : v;
+                });
+                const valor = limparValorAtributo(bruto);
+                if (valor && !lista.some((v) => normalizarTexto(v) === normalizarTexto(valor))) lista.push(valor);
+            });
+        });
+        if (!achou) { valores[nome] = ""; return; }
+        if (modo === "CONTAGEM" || modo === "SOMA") {
+            valores[nome] = `${formatarNumero(total, modo === "SOMA" ? 2 : 0)}${sufixo}`;
+            return;
+        }
+        if (modo === "FAIXA") {
+            const numeros = lista.map(paraNumero).filter(Number.isFinite).sort((x, y) => x - y);
+            if (!numeros.length) { valores[nome] = ""; return; }
+            const [min, max] = [numeros[0], numeros[numeros.length - 1]];
+            valores[nome] = min === max ? `de ${formatarNumero(min)}${sufixo}` : `de ${formatarNumero(min)}${sufixo} a ${formatarNumero(max)}${sufixo}`;
+            return;
+        }
+        const numeros = lista.map(valorNumerico);
+        const ordenada = numeros.every(Number.isFinite)
+            ? lista.map((v, i) => [v, numeros[i]]).sort((x, y) => x[1] - y[1]).map(([v]) => v)
+            : [...lista].sort(comparar);
+        // valores que já têm vírgula (ex.: "cabo de cobre nu, 50 mm²") são separados por ponto e vírgula
+        const juntos = ordenada.some((v) => v.includes(","))
+            ? (ordenada.length > 1 ? `${ordenada.slice(0, -1).join("; ")} e ${ordenada[ordenada.length - 1]}` : ordenada[0])
+            : juntarLista(ordenada);
+        valores[nome] = ordenada.length ? `${juntos}${sufixo}` : "";
+    });
+    return valores;
 }
 
 export function classificarMaterial(nome, regras) {
@@ -174,7 +280,15 @@ function juntarLista(lista) {
 }
 
 function aplicarCampos(texto, campos) {
-    return String(texto ?? "").replace(/\{([A-Z_]+)\}/g, (inteiro, nome) => (nome in campos ? campos[nome] : inteiro));
+    // [[ ... ]] = trecho opcional: só aparece se todos os campos dentro dele tiverem valor
+    const comOpcionais = String(texto ?? "").replace(/\[\[([\s\S]*?)\]\]/g, (_, trecho) => {
+        const nomes = [...trecho.matchAll(/\{([A-Z0-9_]+)\}/g)].map((m) => m[1]);
+        return nomes.every((n) => String(campos[n] ?? "").trim()) ? trecho : "";
+    });
+    return comOpcionais.replace(/\{([A-Z0-9_]+)\}/g, (inteiro, nome) => {
+        if (!(nome in campos)) return inteiro;
+        return String(campos[nome] ?? "").trim() || (campos.__atributos?.has(nome) ? "conforme projeto" : "");
+    });
 }
 
 function grupoBate(filtro, grupo) {
@@ -204,7 +318,7 @@ const comparar = (a, b) => a.localeCompare(b, "pt-BR", { numeric: true, sensitiv
 /** Converte o TEXTO da planilha em parágrafos/marcadores; {NORMAS} marca o ponto da lista de normas. */
 function converterTexto(texto, campos) {
     const blocos = [];
-    aplicarCampos(texto, campos).split(/\n+/).map((l) => l.trim()).filter(Boolean).forEach((linha) => {
+    aplicarCampos(texto, campos).split(/\n+/).map((l) => l.replace(/[ \t]{2,}/g, " ").trim()).filter(Boolean).forEach((linha) => {
         if (linha === "{NORMAS}") blocos.push({ tipo: "normas" });
         else if (/^[-•–]\s+/.test(linha)) blocos.push({ tipo: "item", texto: linha.replace(/^[-•–]\s+/, "") });
         else blocos.push({ tipo: "paragrafo", texto: linha });
@@ -238,10 +352,12 @@ export function montarMemorial({ itens = [], associacoes = [], config, disciplin
     // ---- agrega os materiais do IFC por grupo (juntando cores do mesmo cabo) ----
     const porGrupo = new Map();
     const semRegra = [];
+    const itensClassificados = [];
     itens.forEach((item) => {
         const nome = String(item?.name ?? "").trim();
         if (!nome) return;
         const grupo = classificarMaterial(nome, config.regras) || "SEM_GRUPO";
+        itensClassificados.push({ nome, grupo, quantidade: Number.isFinite(item.quantity) ? item.quantity : 0 });
         if (grupo === "SEM_GRUPO") semRegra.push(nome);
         const assoc = assocPorItem.get(normBusca(nome));
         const unidade = unidadeDoModelo(item.unitLabel);
@@ -282,9 +398,16 @@ export function montarMemorial({ itens = [], associacoes = [], config, disciplin
     campos.ONDE = campos.ENDERECO || campos.LOCAL || "local indicado em projeto";
     campos.CLIENTE_FRASE = campos.CLIENTE ? `, para o cliente ${campos.CLIENTE}` : "";
     campos.DISCIPLINAS = campos.DISCIPLINA;
+    const atributos = calcularAtributos(config.atributos || [], itensClassificados);
+    Object.assign(campos, atributos);
+    Object.defineProperty(campos, "__atributos", { value: new Set(Object.keys(atributos)), enumerable: false });
 
+    // normas próprias do roteiro primeiro; as comuns a vários roteiros (infraestrutura, NRs) depois
     const normas = config.normas
         .filter((n) => n.estruturas.includes(roteiro) && condicaoAtendida(n.mostrarSe, gruposPresentes))
+        .map((n, i) => ({ n, i, comum: n.estruturas.length > 1 ? 1 : 0 }))
+        .sort((a, b) => a.comum - b.comum || a.i - b.i)
+        .map(({ n }) => n)
         .map((n) => ({ norma: n.norma, descricao: n.descricao }))
         .filter((n, i, lista) => lista.findIndex((m) => normalizarTexto(m.norma) === normalizarTexto(n.norma)) === i);
 
@@ -305,7 +428,7 @@ export function montarMemorial({ itens = [], associacoes = [], config, disciplin
         const unicoFilho = filhos.length === 1 && (filhos[0] === linhas.length - 1 || linhas[filhos[0] + 1]?.nivel <= l.nivel)
             ? linhas[filhos[0]] : null;
         if (unicoFilho && unicoFilho.nivel === l.nivel + 1) {
-            linhasRoteiro.push({ ...l, texto: `${l.texto}\n${unicoFilho.texto}`, listar: [...l.listar, ...unicoFilho.listar] });
+            linhasRoteiro.push({ ...l, texto: `${l.texto}\n${unicoFilho.texto}`, listar: [...l.listar, ...unicoFilho.listar], tituloAnexo: unicoFilho.listar.length && !l.listar.length ? unicoFilho.titulo : l.titulo });
             i = filhos[0];
             continue;
         }
@@ -326,7 +449,7 @@ export function montarMemorial({ itens = [], associacoes = [], config, disciplin
                 materiais.push(...linhasDoGrupo(g));
             });
         });
-        if (materiais.length) anexo.push({ titulo: tituloFrase(l.titulo), itens: materiais });
+        if (materiais.length) anexo.push({ titulo: tituloFrase(l.tituloAnexo || l.titulo), itens: materiais });
         const conteudo = converterTexto(l.texto, campos);
         return { nivel, titulo: l.titulo, conteudo, materiais: materiais.map((m) => m.descricao) };
     });
@@ -365,7 +488,8 @@ export function montarMemorial({ itens = [], associacoes = [], config, disciplin
             materiais: itens.length,
             titulos: titulos.length,
             linhas: anexo.reduce((s, g) => s + g.itens.length, 0),
-            pendentes
+            pendentes,
+            atributos
         }
     };
 }

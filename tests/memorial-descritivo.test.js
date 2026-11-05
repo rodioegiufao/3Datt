@@ -67,7 +67,8 @@ function respostaFake() {
 
     // --- planilha de regras ---
     assert.ok(config.regras.length > 80, "a aba Classificacao deve ter as regras iniciais");
-    assert.deepStrictEqual(config.disciplinas.map((d) => d.codigo).slice(0, 2), ["ELE", "LOG"]);
+    ["ELE", "ALIM", "LOG", "CFTV", "SDAI", "SPDA", "FV", "GERAL"].forEach((c) => assert.ok(config.disciplinas.some((d) => d.codigo === c), `falta a disciplina ${c}`));
+    assert.ok(config.atributos.length > 30, "a aba Atributos deve ter os atributos iniciais");
     const roteiros = new Set(config.disciplinas.map((d) => d.estrutura));
     roteiros.forEach((r) => assert.ok(config.estrutura.some((l) => l.estruturas.includes(r)), `roteiro ${r} sem linhas na aba Estrutura`));
     assert.throws(() => core.lerConfiguracao({ Geral: [] }), /Disciplinas/);
@@ -86,7 +87,7 @@ function respostaFake() {
 
     // --- regras específicas antes das genéricas ---
     const grupo = (nome) => core.classificarMaterial(nome, config.regras);
-    assert.strictEqual(grupo("Cabo unipolar - Solar - Cobre - Isol. XLPE - 1,8KV - 6 mm² - Preto"), "ELE_FOTOVOLTAICO");
+    assert.strictEqual(grupo("Cabo unipolar - Solar - Cobre - Isol. XLPE - 1,8KV - 6 mm² - Preto"), "FV_CABOS_CC");
     assert.strictEqual(grupo("Cabo Unipolar - cobre - Isol. XLPE - 0,6/1kV - 2.5 mm² - Azul claro"), "ELE_CONDUTORES");
     assert.strictEqual(grupo("Dispositivo de Proteção - Interruptor bipolar DR - fase/neutro - In 30mA"), "ELE_DR");
     assert.strictEqual(grupo("Dispositivo de Proteção - Dispositivo de proteção contra surto - 275 V - 40 KA"), "ELE_DPS");
@@ -105,6 +106,10 @@ function respostaFake() {
     assert.strictEqual(disc({ id: "IFC_ELE_380", displayName: "Instalações elétricas — 380 V" }), "ELE");
     assert.strictEqual(disc({ id: "modelo-09", arquivo: "IFC-ELE-DRL" }), "ELE");
     assert.strictEqual(disc({ id: "IFC_HID", displayName: "Hidráulica" }), "GERAL");
+    assert.strictEqual(disc({ id: "IFC_SDAI", arquivo: "IFC-SDAI-TCE" }), "SDAI");
+    assert.strictEqual(disc({ id: "IFC_SPDA", displayName: "SPDA" }), "SPDA");
+    assert.strictEqual(disc({ id: "IFC_FV", displayName: "Sistema fotovoltaico" }), "FV");
+    assert.strictEqual(disc({ id: "IFC_ALIM", displayName: "Alimentadores" }), "ALIM");
 
     // --- utilitários ---
     assert.deepStrictEqual(core.separarCor("Cabo - X - 2.5 mm² - Azul claro"), { base: "Cabo - X - 2.5 mm²", cor: "Azul claro" });
@@ -167,10 +172,84 @@ function respostaFake() {
     ["CONDUTORES ELÉTRICOS", "DISPOSITIVOS DE PROTEÇÃO E COMANDO", "ENSAIOS E VERIFICAÇÃO FINAL", "ATERRAMENTO E EQUIPOTENCIALIZAÇÃO"].forEach((t) => assert.ok(titulosEle.includes(t), `faltou ${t}`));
     ["ILUMINAÇÃO", "Condutores dos circuitos", "Disjuntores termomagnéticos"].forEach((t) => assert.ok(!titulosEle.includes(t), `não deveria ter ${t}`));
     assert.match(ele.titulos.find((t) => t.titulo === "CONDUTORES ELÉTRICOS").materiais[0], /\(cores: azul claro e preto\)$/);
-    assert.strictEqual(ele.anexo.find((g) => g.titulo === "Condutores elétricos").itens[0].quantidade, 220.46);
+    assert.strictEqual(ele.anexo.find((g) => g.titulo === "Condutores dos circuitos").itens[0].quantidade, 220.46);
     assert.ok(ele.titulos[0].conteudo[0].texto.includes("situada em Boa Vista / RR."), "sem endereço usa o local e sem cliente não cita cliente");
     assert.strictEqual(core.tituloFrase("CIRCUITO FECHADO DE TV (CFTV)"), "Circuito fechado de TV (CFTV)");
     assert.strictEqual(core.limparDescricao(".S.O.S CAIXA DE PASSAGEM - EMBUTIR NO PISO"), "CAIXA DE PASSAGEM - EMBUTIR NO PISO");
+
+    // --- textos com as características dos materiais (aba Atributos) ---
+    const comAtributos = core.montarMemorial({
+        itens: [
+            ...itensLog,
+            { name: "Acessórios Cabeamento - Metálico - Conector - RJ45 - CM8v - Cat 6, para Patch Panel - Keystone", quantity: 5, unitLabel: "item(ns)" },
+            { name: "Acessórios Cabeamento - Metálico - Switch - 10/100 - BaseTX - 48 portas", quantity: 2, unitLabel: "item(ns)" },
+            { name: "Eletrocalha furada tipo U pré-galv. quen - Eletrocalha perfurada tipo U - 100x100mm chapa 18", quantity: 17.1, unitLabel: "metro(s)" },
+            { name: "Eletroduto PVC flexível - Eletroduto pesado - 1.1/2\" - Piso", quantity: 3, unitLabel: "metro(s)" }
+        ], config, disciplina: "LOG", dados: { obra: "Escola" }
+    });
+    const at = comAtributos.resumo.atributos;
+    assert.strictEqual(at.CABO_CATEGORIA, "Categoria 6");
+    assert.strictEqual(at.RACK, "mini rack de parede de 12U, 19\" x 570 mm de profundidade");
+    assert.strictEqual(at.SWITCH, "48 portas 10/100 Mbps");
+    assert.strictEqual(at.ELETROCALHA_DIM, "100x100 mm (chapa 18)");
+    assert.strictEqual(at.ELETRODUTO_FLEX_DIAM, "3/4\" e 1 1/2\"", "diâmetros em ordem numérica e 1.1/2 -> 1 1/2");
+    assert.strictEqual(at.PATCH_PANEL_PORTAS, "24 portas");
+    const textoDe = (p, titulo) => p.titulos.find((t) => t.titulo === titulo).conteudo.map((b) => b.texto || "").join(" ");
+    assert.match(textoDe(comAtributos.payload, "Cabos de par trançado"), /O cabeamento horizontal deste projeto será em cabo U\/UTP Categoria 6\./);
+    assert.match(textoDe(comAtributos.payload, "RACKS E ACESSÓRIOS"), /Neste projeto está previsto mini rack de parede de 12U/);
+    // sem fibra no IFC, o trecho opcional some (e não sobra "{FIBRA_TIPO}" nem "conforme projeto" solto)
+    assert.ok(!/\{[A-Z0-9_]+\}|\[\[|\]\]/.test(JSON.stringify(comAtributos.payload)), "nenhum campo ou trecho opcional pode sobrar sem preencher");
+    assert.ok(!/ {2}/.test(JSON.stringify(comAtributos.payload.titulos)), "sem espaços duplos quando um trecho opcional some");
+
+    // FAIXA, SOMA e CONTAGEM
+    const atr = core.calcularAtributos(config.atributos, [
+        { nome: "Dispositivo de Proteção - Disjuntor tripolar termomagnético caixa moldada - 380/415 V - 32 A - 18 kA", grupo: "ELE_DISJUNTORES", quantidade: 2 },
+        { nome: "Dispositivo de Proteção - Disjuntor unipolar termomagnético - 220 V/127 V - DIN - Curva C - 400 A - 4.5 kA", grupo: "ELE_DISJUNTORES", quantidade: 1 },
+        { nome: "Elementos fotovoltaicos - Módulo fotovoltaico - Monocristalino - 238,4 x 130,3 x 3,5 cm - 670W", grupo: "FV_MODULOS", quantidade: 871 },
+        { nome: "Elementos fotovoltaicos - Inversores fotovoltaicos - Inversor - trifásico - 110000W - 10SPMP", grupo: "FV_INVERSORES", quantidade: 6 }
+    ]);
+    assert.strictEqual(atr.DISJUNTOR_CORRENTE, "de 32 A a 400 A");
+    assert.strictEqual(atr.DISJUNTOR_ICC, "de 4,5 kA a 18 kA");
+    assert.strictEqual(atr.FV_POTENCIA_KWP, "583,57 kWp");
+    assert.strictEqual(atr.FV_QTD_MODULOS, "871 módulos");
+    assert.strictEqual(atr.FV_INVERSOR, "trifásico de 110 kW");
+    assert.strictEqual(atr.CABO_CATEGORIA, "");
+
+    // --- novos roteiros ---
+    const sdai = core.montarMemorial({
+        itens: [
+            { name: "Cabeamento de Incêndio - Cabo Alarme De Incêndio 2x1,50mm² Blindado - 2", quantity: 100, unitLabel: "metro(s)" },
+            { name: "Incêndio - Alarme de incêndio - Central de Alarme e Detecção", quantity: 1, unitLabel: "item(ns)" },
+            { name: "Incêndio - Alarme de incêndio - Acionador manual de alarme de incêndio c/ sirene endereçável", quantity: 4, unitLabel: "item(ns)" }
+        ], config, disciplina: "SDAI", dados: { obra: "Escola" }
+    }).payload;
+    const tSdai = sdai.titulos.map((t) => t.titulo);
+    ["Central de detecção e alarme", "Acionadores manuais", "Avisadores sonoros e visuais", "CABEAMENTO DO SISTEMA", "ENSAIOS E COMISSIONAMENTO"].forEach((t) => assert.ok(tSdai.includes(t), `SDAI sem ${t}`));
+    assert.deepStrictEqual(sdai.titulos.find((t) => t.titulo === "Acionadores manuais").materiais, ["Incêndio - Alarme de incêndio - Acionador manual de alarme de incêndio c/ sirene endereçável"]);
+    assert.match(textoDe(sdai, "CABEAMENTO DO SISTEMA"), /cabos blindados de 2x1,50 mm², totalizando 100 m\./);
+    assert.strictEqual(sdai.normas[0].norma, "ABNT NBR 17240", "norma própria do sistema vem primeiro");
+
+    const spda = core.montarMemorial({
+        itens: [
+            { name: "Captores - Captor Franklin - H=250mm - 01 descida", quantity: 4, unitLabel: "item(ns)" },
+            { name: "Condutores de proteção - SPDA - Cabo de cobre Nú - 7 fios - 50mm²", quantity: 300, unitLabel: "metro(s)" },
+            { name: "Aterramento - Haste de aterramento - cobreada - 5/8\" x 2,40m", quantity: 12, unitLabel: "item(ns)" }
+        ], config, disciplina: "SPDA", dados: { obra: "Escola" }
+    }).payload;
+    ["SUBSISTEMA DE CAPTAÇÃO", "SUBSISTEMA DE DESCIDA E CONDUTORES", "SUBSISTEMA DE ATERRAMENTO", "INSPEÇÃO, ENSAIOS E LAUDO"].forEach((t) => assert.ok(spda.titulos.some((x) => x.titulo === t), `SPDA sem ${t}`));
+    assert.match(textoDe(spda, "SUBSISTEMA DE ATERRAMENTO"), /12 hastes de aço cobreado de 5\/8" x 2,40m/);
+    assert.ok(spda.normas.some((n) => n.norma === "ABNT NBR 5419-3"));
+
+    const fv = core.montarMemorial({
+        itens: [
+            { name: "Elementos fotovoltaicos - Módulo fotovoltaico - Monocristalino - 238,4 x 130,3 x 3,5 cm - 670W", quantity: 10, unitLabel: "item(ns)" },
+            { name: "Cabo unipolar - Solar - Cobre - Isol. XLPE - 1,8KV - 6 mm² - Preto", quantity: 50, unitLabel: "metro(s)" }
+        ], config, disciplina: "FV", dados: { obra: "Escola" }
+    }).payload;
+    assert.match(fv.titulos[0].conteudo[0].texto, /potência de pico de 6,7 kWp, com 10 módulos\.$/);
+    assert.ok(!fv.titulos[0].conteudo[0].texto.includes("inversores"), "sem inversor no IFC a frase dos inversores some");
+    assert.ok(fv.titulos.some((t) => t.titulo === "COMISSIONAMENTO"));
+    assert.ok(fv.normas.some((n) => n.norma === "ABNT NBR 16274"));
 
     // --- servidor: validação ---
     const memorial = require("../api/_memorial-descritivo");
@@ -196,6 +275,7 @@ function respostaFake() {
     assert.ok(xml.includes("ANEXO A — RELAÇÃO DE MATERIAIS"));
     assert.ok(xml.includes("Materiais previstos neste projeto:"));
     assert.ok(!xml.includes("**"), "marcação de negrito não pode vazar para o Word");
+    assert.ok(xml.includes('<w:r><w:t xml:space="preserve">Cabeamento estruturado - metálico - UTP-CAT.6 - 4</w:t></w:r>'), "a lista de materiais usa o mesmo tamanho de letra do texto");
     assert.match(xml, /<w:b\/><w:bCs\/><\/w:rPr><w:t xml:space="preserve">Responsabilidades da contratada\.<\/w:t>/);
     assert.ok(xml.includes("Item &lt;w:p&gt;&amp;&quot;quebra&quot;"), "texto do usuário precisa ser escapado");
     assert.ok(docx.file("word/settings.xml").asText().includes("<w:updateFields"), "sumário atualiza ao abrir");
