@@ -271,7 +271,12 @@ export function filtrarItensPorModelo(itens, modeloId) {
 
 export function nomeIfcUtil(valor) {
     const texto = String(valor ?? "").trim();
-    return NOMES_GENERICOS.has(normalizarTexto(texto)) ? "" : texto;
+    const normal = normalizarTexto(texto);
+    // nomes-padrão dos exportadores (Revit, ArchiCAD...): "IfcBuilding", "Default Site", "Edifício 1"...
+    if (NOMES_GENERICOS.has(normal)) return "";
+    if (/^(ifc)?\s*(building|site|project|edificio|edificacao|projeto|terreno)(\s*\d+)?$/.test(normal)) return "";
+    if (/^(default|my|meu|novo|new)\s+(building|site|project|edificio|projeto)$/.test(normal)) return "";
+    return texto;
 }
 
 function juntarLista(lista) {

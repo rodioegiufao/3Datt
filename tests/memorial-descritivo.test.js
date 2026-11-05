@@ -122,6 +122,8 @@ function respostaFake() {
     ];
     assert.deepStrictEqual(core.filtrarItensPorModelo(porModelo, "IFC_ELE").map((i) => [i.name, i.quantity]), [["A", 7], ["C", 2]]);
     assert.strictEqual(core.nomeIfcUtil("Project Name"), "");
+    ["IfcBuilding", "IfcSite", "Default Site", "Building 1"].forEach((n) => assert.strictEqual(core.nomeIfcUtil(n), "", n));
+    assert.strictEqual(core.nomeIfcUtil("Farmácia Buritis"), "Farmácia Buritis");
 
     // --- memorial de cabeamento estruturado ---
     const itensLog = [

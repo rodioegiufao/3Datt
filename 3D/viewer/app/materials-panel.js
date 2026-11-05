@@ -58,7 +58,9 @@ export function setupMaterialsPanelControls() {
             return {
                 id,
                 src: configurado?.src || carregado?.uploadDateSrc || "",
-                displayName: configurado?.displayName || configurado?.label || carregado?.displayName || id
+                // modelos enviados pelo upload não têm nome no cadastro: usa o nome do arquivo
+                displayName: configurado?.displayName || configurado?.label || carregado?.displayName
+                    || String(configurado?.src || "").split(/[\\/]/).pop() || id
             };
         });
         abrirGeradorMemorial({
