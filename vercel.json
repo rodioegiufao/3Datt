@@ -37,6 +37,9 @@
     },
     "api/viewer-page.js": {
       "includeFiles": "3D/viewer.html"
+    },
+    "api/gerar-memorial-word.js": {
+      "includeFiles": "memorial/template/**"
     }
   }
 }
