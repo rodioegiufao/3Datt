@@ -4,3 +4,4 @@ export {
     loadAssociationDefinitionsFromExcel,
     loadAssociaUnitsFromExcel
 } from "../../excel-export.js";
+export { abrirGeradorMemorial } from "../../memorial-export.js";
