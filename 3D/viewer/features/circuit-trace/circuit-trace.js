@@ -63,6 +63,22 @@ function applicationOf(metaObject) {
     return normalize(propertyValue(propertySet(metaObject, "Identificação_Elemento"), "Aplicação"));
 }
 
+/**
+ * Tipo de infraestrutura, para a prioridade do caminho (eletrocalha → perfilado → eletroduto).
+ * Usa Classe/Rede/Tipo do conjunto Identificação_Elemento (ex.: "Perfilados perfurados",
+ * "Elétrica (Eletrocalha)", "Eletroduto PVC flexível").
+ */
+export function routeTypeOf(metaObject) {
+    const set = propertySet(metaObject, "Identificação_Elemento");
+    const application = applicationOf(metaObject);
+    const text = normalize([propertyValue(set, "Classe"), propertyValue(set, "Rede"), propertyValue(set, "Tipo"), metaObject?.name].join(" "));
+    if (text.includes("perfilad")) return "perfilado";
+    if (text.includes("eletrocalha") || text.includes("leito") || text.includes("bandeja")) return application === "conexao" ? "tray-fitting" : "tray";
+    if (application === "circular" || text.includes("eletroduto")) return application.startsWith("caixa") ? "box" : "conduit";
+    if (application.startsWith("caixa")) return "box";
+    return "tray";
+}
+
 export function createCircuitTraceFeature({
     viewer,
     xktLoader,
@@ -219,6 +235,7 @@ export function createCircuitTraceFeature({
             .map((geometry) => ({
                 id: geometry.liveId,
                 kind: classify(metas[geometry.liveId], panelId),
+                routeType: routeTypeOf(metas[geometry.liveId]),
                 positions: Float32Array.from(geometry.positions),
                 indices: Uint32Array.from(geometry.indices)
             }))
@@ -404,7 +421,7 @@ export function createCircuitTraceFeature({
             const meters = Math.round(result.length).toLocaleString("pt-BR");
             setBar(
                 `${quadro} • ${circuito}: ${result.reached.length}/${pointIds.length} ponto(s) • ~${meters} m de infraestrutura` +
-                (result.gaps ? ` • ${result.gaps} folga(s) de modelagem` : "") +
+                (result.gaps ? ` • ${result.gaps} ligação(ões) por folga de modelagem` : "") +
                 (notReached ? ` • ${notReached} ponto(s) sem caminho até o quadro` : ""),
                 { warn: notReached > 0 }
             );

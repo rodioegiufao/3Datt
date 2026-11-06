@@ -11,6 +11,7 @@ self.onmessage = ({ data }) => {
             const elements = data.elements.map((element) => ({
                 id: element.id,
                 kind: element.kind,
+                routeType: element.routeType,
                 positions: element.positions,
                 indices: element.indices
             }));
