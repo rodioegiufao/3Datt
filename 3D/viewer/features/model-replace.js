@@ -2,6 +2,8 @@
 // próprio computador para conferir colisões, cobertura etc. Nada é enviado ao servidor:
 // a troca vale só nesta aba e some ao recarregar a página (ou com "Restaurar original").
 
+import { convertIfcFileToXkt, isWorkerConversionSupported } from "../ifc/ifc-xkt-converter.js";
+
 const XEOKIT_URL = "https://cdn.jsdelivr.net/npm/@xeokit/xeokit-sdk@2.6.107/dist/xeokit-sdk.min.es.js";
 // Versão do web-ifc usada nos exemplos oficiais do xeokit 2.6.x
 const WEB_IFC_VERSION = "0.0.51";
@@ -162,8 +164,23 @@ export function createModelReplaceFeature({
                 ...getLoadOptions()
             };
             let objectUrl = null;
+            let ifcAsXkt = null;
 
-            if (extension === "ifc") {
+            // IFC: converte para XKT num Web Worker (sem travar a tela) e segue pelo caminho do XKT.
+            if (extension === "ifc" && isWorkerConversionSupported()) {
+                try {
+                    const converted = await convertIfcFileToXkt(file, { onProgress: (text) => showToast(`${file.name}: ${text}`) });
+                    ifcAsXkt = converted.file;
+                } catch (error) {
+                    console.warn("[substituir modelo] Conversão IFC no navegador falhou; usando o leitor antigo.", error);
+                }
+            }
+
+            if (ifcAsXkt) {
+                objectUrl = URL.createObjectURL(ifcAsXkt);
+                params.src = objectUrl;
+                showToast(`Abrindo ${file.name}…`);
+            } else if (extension === "ifc") {
                 showToast(`Preparando o leitor de IFC…`);
                 loader = await getIfcLoader();
                 showToast(`Lendo ${file.name}… (arquivos grandes podem travar a tela por alguns segundos)`);
