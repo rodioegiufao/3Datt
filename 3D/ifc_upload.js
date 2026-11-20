@@ -3,6 +3,11 @@ import {
     IFCOpenShellLoaderPlugin,
     GLTFLoaderPlugin
 } from "https://cdn.jsdelivr.net/npm/@xeokit/xeokit-sdk@2.6.107/dist/xeokit-sdk.min.es.js";
+import {
+    convertIfcFileToXkt,
+    isWorkerConversionSupported,
+    prewarmIfcFiles
+} from "./viewer/ifc/ifc-xkt-converter.js";
 
 const bridge = window.ifcUploadBridge;
 
@@ -1005,6 +1010,37 @@ if (!bridge) {
     }
 
     async function loadIfcUpload(file, uploadContext = {}) {
+        // Caminho principal: converte IFC → XKT num Web Worker (a tela não congela) e abre o
+        // XKT pelo mesmo carregador rápido dos modelos do servidor. Reabrir o mesmo IFC usa o cache.
+        if (isWorkerConversionSupported()) {
+            const queueId = uploadContext.fileQueueId || "";
+            try {
+                const converted = await convertIfcFileToXkt(file, {
+                    onProgress: (text) => {
+                        updateUploadQueueItem(queueId, { statusText: "Convertendo", metaText: text });
+                        setUploadProgress({ fileName: file.name, percentage: 100, metaText: text, statusText: "Convertendo" });
+                    }
+                });
+                const objects = converted.stats?.objects;
+                console.info(
+                    `[IFC] ${file.name}: ${converted.cached ? "XKT do cache" : `convertido em ${converted.seconds.toFixed(1)} s`}`
+                    + (objects ? `, ${objects} objetos` : "")
+                    + `, ${formatBytes(file.size)} IFC → ${formatBytes(converted.file.size)} XKT.`
+                );
+                return loadXktUpload(converted.file, {
+                    ...uploadContext,
+                    formatLabel: "IFC",
+                    displayFileName: file.name
+                });
+            } catch (error) {
+                console.warn("[IFC] Conversão no navegador falhou; usando o leitor antigo (mais lento).", error);
+                updateUploadQueueItem(uploadContext.fileQueueId || "", {
+                    statusText: "Processando",
+                    metaText: "Conversor rápido falhou; usando leitor alternativo (pode travar a tela)…"
+                });
+            }
+        }
+
         const modelId = buildUploadModelId("IFC_UPLOAD");
         const { fileQueueId = "" } = uploadContext;
         const renderProfile = bridge.getDefaultRenderProfile();
@@ -1187,7 +1223,8 @@ if (!bridge) {
     function loadXktUpload(file, uploadContext = {}) {
         const objectUrl = URL.createObjectURL(file);
         const { fileQueueId = "" } = uploadContext;
-        const modelId = buildUploadModelId("XKT_UPLOAD");
+        const modelId = buildUploadModelId(uploadContext.formatLabel === "IFC" ? "IFC_UPLOAD" : "XKT_UPLOAD");
+        const displayFileName = uploadContext.displayFileName || file.name;
 
         const renderProfile = bridge.getDefaultRenderProfile();
         const performanceModeEnabled = bridge.getPerformanceModeEnabled();
@@ -1213,7 +1250,7 @@ if (!bridge) {
                 metaText: "Falha ao iniciar XKT.",
                 isError: true
             });
-            finalizeUploadBatch(uploadContext, { succeeded: false, fileName: file.name });
+            finalizeUploadBatch(uploadContext, { succeeded: false, fileName: displayFileName });
             return;
         }
         updateUploadQueueItem(fileQueueId, {
@@ -1221,12 +1258,14 @@ if (!bridge) {
             metaText: "Carregando geometria XKT..."
         });
 
+        // file = o XKT (também quando veio de um IFC convertido): compatibilização, cobertura
+        // e traçado de circuitos releem a geometria a partir dele.
         finalizeUploadedModelLoad(model, {
             file,
             ...uploadContext,
             modelId,
-            fileName: file.name,
-            formatLabel: "XKT",
+            fileName: displayFileName,
+            formatLabel: uploadContext.formatLabel || "XKT",
             objectUrl
         });
     }
@@ -1290,6 +1329,10 @@ if (!bridge) {
             if (invalidFile) {
                 bridge.setUploadStatus("Arquivo inválido. Selecione apenas arquivos .xkt, .ifc ou .glb.", true);
                 return;
+            }
+
+            if (!window.__BIM_DESKTOP__?.maybeConvertIfc) {
+                prewarmIfcFiles(files); // vários IFC: converte em paralelo enquanto os anteriores abrem
             }
 
             registerShareableFiles(files);
